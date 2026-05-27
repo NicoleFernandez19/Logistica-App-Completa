@@ -396,8 +396,8 @@ class Paso3Reposicion(ctk.CTkFrame):
     def _autodetectar(self):
         base = Path(sys.argv[0]).resolve().parent
 
-        # ── 1. Buscar en Maestro_consumo por mes/año exacto ──────────────────
-        carpeta_mc = base / "Maestro_consumo"
+        # ── 1. Buscar en Maestro_Consumo por mes/año exacto ──────────────────
+        carpeta_mc = base / "Maestro_Consumo"
         por_fecha = {}          # {(año, mes): Path}
         if carpeta_mc.exists():
             for p in carpeta_mc.iterdir():
@@ -463,7 +463,7 @@ class Paso3Reposicion(ctk.CTkFrame):
             except Exception:
                 pass
 
-        # Fallback: si Maestro_consumo estaba vacío, usar carpeta normal
+        # Fallback: si Maestro_Consumo estaba vacío, usar carpeta normal
         if not por_fecha:
             maestros.sort(key=self._fecha_archivo, reverse=True)
             if maestros and "maestro_actual" not in self._paths and self._get_maestro() is None:
@@ -491,7 +491,7 @@ class Paso3Reposicion(ctk.CTkFrame):
         if key == "agentes":
             idir = base / "Data"
         else:
-            idir = base / "Maestro_consumo"
+            idir = base / "Maestro_Consumo"
         idir.mkdir(exist_ok=True)
         path = filedialog.askopenfilename(
             title=f"Seleccionar {key}",
@@ -640,7 +640,12 @@ class ProductDialog(ctk.CTkToplevel):
                 try:
                     value = int(value)
                 except ValueError:
-                    pass
+                    messagebox.showerror(
+                        "SKU inválido",
+                        f"El SKU debe ser un número entero. Valor ingresado: '{value}'",
+                        parent=self,
+                    )
+                    return
             result[key] = value
 
         self.result = result

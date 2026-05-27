@@ -7,7 +7,7 @@ if _BASE not in sys.path:
     sys.path.insert(0, _BASE)
 
 # Auto-instalar dependencias si faltan
-_DEPS = ["customtkinter", "pandas", "openpyxl", "numpy"]
+_DEPS = ["customtkinter", "pandas", "openpyxl", "numpy", "xlrd"]
 _missing = []
 for dep in _DEPS:
     try:
@@ -18,7 +18,14 @@ for dep in _DEPS:
 if _missing:
     import subprocess
     print(f"Instalando dependencias faltantes: {', '.join(_missing)}")
-    subprocess.check_call([sys.executable, "-m", "pip", "install"] + _missing)
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install"] + _missing)
+    except subprocess.CalledProcessError:
+        print(
+            "Error al instalar dependencias. Ejecute manualmente:\n"
+            f"  pip install {' '.join(_missing)}"
+        )
+        sys.exit(1)
     print("Dependencias instaladas. Reiniciando...")
     os.execv(sys.executable, [sys.executable] + sys.argv)
 

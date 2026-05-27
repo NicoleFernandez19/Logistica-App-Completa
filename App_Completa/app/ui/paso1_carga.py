@@ -18,20 +18,24 @@ _ARCHIVOS = [
     ("sube",         "SUBE",            "Envíos rollos SUBE"),
     ("rollo_env",    "ROLLO (envíos)",  "Envíos rollos térmicos"),
     ("trx_sube",     "TRX SUBE",        "Transacciones SUBE"),
+    ("resma_env",    "RESMA (envíos)",  "Envíos de resmas del mes"),
+    ("fajas",        "FAJAS",           "Cantidad de fajas por agente"),
 ]
 
 _AUTO_NOMBRES = {
-    "tiv":          ["tiv", "tiv_final", "tiv final"],
-    "maestro":      ["maestro", "maestro_consumo", "maestro_consumo_envio",
-                     "maestro consumo", "maestro consumo envio",
-                     "maestro_consumo_envios"],
+    "tiv":          ["tiv_final", "tiv final", "tiv"],
+    "maestro":      ["maestro_consumo_envio", "maestro consumo envio",
+                     "maestro_consumo_envios", "maestro_consumo", "maestro consumo",
+                     "maestro"],
     "fac_termicas": ["fac_termicas", "fac termicas", "fac-termicas", "factermicas"],
     "dsp_kyc":      ["dsp_kyc", "dsp kyc", "dsp-kyc", "dspkyc", "dsp"],
     "com_tx_int":   ["com_tx_int", "com tx int", "com-tx-int", "comtxint"],
     "prisma":       ["prisma"],
+    "trx_sube":     ["trx_sube", "trx sube", "trxsube"],   # antes de "sube"
     "sube":         ["sube"],
-    "rollo_env":    ["rollos", "rollo", "rollo_env", "rollos_env", "rollo env"],
-    "trx_sube":     ["trx_sube", "trx sube", "trxsube"],
+    "rollo_env":    ["rollo_env", "rollos_env", "rollo env", "rollos", "rollo"],
+    "resma_env":    ["resma_env", "resma", "resmas"],
+    "fajas":        ["fajas"],
 }
 _EXTS = {".csv", ".xlsx", ".xls"}
 _MESES_P1 = {
@@ -43,7 +47,7 @@ _MESES_P1 = {
 
 
 class Paso1Carga(ctk.CTkFrame):
-    """Paso 1: Selección de 9 archivos de entrada para el cálculo de consumo."""
+    """Paso 1: Selección de 11 archivos de entrada para el cálculo de consumo."""
 
     def __init__(self, parent, on_change):
         super().__init__(parent, fg_color=GRIS_BG, corner_radius=0)
@@ -70,7 +74,7 @@ class Paso1Carga(ctk.CTkFrame):
                      text_color=NEGRO).pack(side="left", padx=24)
 
         self._lbl_counter = ctk.CTkLabel(
-            bar, text="0 / 9",
+            bar, text="0 / 11",
             font=("Segoe UI", 14, "bold"),
             text_color=GRIS_TEXTO)
         self._lbl_counter.pack(side="right", padx=8)
@@ -157,28 +161,36 @@ class Paso1Carga(ctk.CTkFrame):
         return (anio, 0)
 
     def _maestro_mes_anterior(self):
-        """Busca en Maestro_consumo/ el archivo del mes anterior al actual.
-        Solo acepta archivos cuyo nombre contiene 'maestro'."""
+        """Busca en Maestro_Consumo/ el archivo del mes actual (convencion: el
+        archivo se llama con el mes para el que se usa, eg. MAYO_2026 = stock
+        inicial de Mayo). Acepta solo archivos cuyo nombre contiene 'maestro'."""
         base = Path(sys.argv[0]).resolve().parent
-        carpeta_mc = base / "Maestro_consumo"
+        carpeta_mc = base / "Maestro_Consumo"
         if not carpeta_mc.exists():
             return None
+        candidatos = [
+            p for p in carpeta_mc.iterdir()
+            if p.is_file() and p.suffix.lower() in _EXTS and "maestro" in p.stem.lower()
+        ]
+        if not candidatos:
+            return None
         now = datetime.now()
-        mes_ant = now.month - 1 or 12
-        anio_ant = now.year if now.month > 1 else now.year - 1
-        for p in carpeta_mc.iterdir():
-            if p.is_file() and p.suffix.lower() in _EXTS:
-                if "maestro" in p.stem.lower():
-                    if self._parsear_fecha(p) == (anio_ant, mes_ant):
-                        return p
-        return None
+        # Prioridad 1: match exacto por fecha en el nombre
+        for mes, anio in [(now.month, now.year),
+                          (now.month - 1 or 12,
+                           now.year if now.month > 1 else now.year - 1)]:
+            for p in candidatos:
+                if self._parsear_fecha(p) == (anio, mes):
+                    return p
+        # Prioridad 2: si no hay fecha en el nombre, el más reciente por fecha de modificación
+        return max(candidatos, key=lambda p: p.stat().st_mtime)
 
     def _autodetectar(self):
         base = Path(sys.argv[0]).resolve().parent
         data_dir = base / "Data"
         data_dir.mkdir(exist_ok=True)
 
-        # Maestro Consumo: siempre desde Maestro_consumo/ (mes anterior)
+        # Maestro Consumo: siempre desde Maestro_Consumo/ (mes anterior)
         if "maestro" not in self._paths:
             p_mae = self._maestro_mes_anterior()
             if p_mae:
@@ -197,14 +209,22 @@ class Paso1Carga(ctk.CTkFrame):
             except Exception:
                 pass
 
+        # Pool mutable: cada archivo se asigna a un solo slot
+        pool = dict(disponibles)
         for key, nombres in _AUTO_NOMBRES.items():
             if key == "maestro" or key in self._paths:
                 continue
+            match = None
             for nombre in nombres:
-                if nombre in disponibles:
-                    self._set_path(key, str(disponibles[nombre]),
-                                   disponibles[nombre].name, auto=True)
+                match = next(
+                    (p for stem, p in pool.items() if nombre in stem),
+                    None,
+                )
+                if match:
                     break
+            if match:
+                self._set_path(key, str(match), match.name, auto=True)
+                pool = {s: p for s, p in pool.items() if p != match}
 
         self._actualizar_counter()
 

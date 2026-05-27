@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import traceback
 from functools import reduce
+from pathlib import Path
 from .cargador import _leer as _leer_archivo
 
 
@@ -82,13 +83,34 @@ def ejecutar_proceso_reposicion(
             if "ID P.F" in df.columns:
                 df["ID P.F"] = df["ID P.F"].astype(str).str.strip().str.replace("-", "", regex=False)
 
+        for key, df_hist in [
+            ("consumo_mes_1", df_C1),
+            ("consumo_mes_2", df_C2),
+            ("consumo_mes_3", df_C3),
+        ]:
+            if "ID P.F" not in df_hist.columns:
+                nombre = Path(rutas_consumos[key]).name
+                raise ValueError(
+                    f"Archivo histórico '{nombre}': columna 'ID P.F' no encontrada.\n"
+                    f"Columnas disponibles: {list(df_hist.columns[:20])}"
+                )
+
         print("Paso 2/8: Leyendo archivo de agentes...")
         df_agentes = _leer_archivo(ruta_agentes)
+        if df_agentes.empty or len(df_agentes.columns) == 0:
+            raise ValueError(f"El archivo de agentes está vacío: '{Path(ruta_agentes).name}'")
         col_ag = next(
-            (c for c in ["ID P.F", "ID_PF", "ID P.F "] if c in df_agentes.columns),
-            df_agentes.columns[0],
+            (c for c in ["ID P.F", "ID_PF"] if c in df_agentes.columns),
+            None,
         )
-        lista_agentes_ajuste = df_agentes[col_ag].astype(str).str.strip().unique().tolist()
+        if col_ag is None:
+            raise ValueError(
+                f"Archivo de agentes '{Path(ruta_agentes).name}': columna de ID no encontrada.\n"
+                f"Columnas disponibles: {list(df_agentes.columns[:20])}"
+            )
+        lista_agentes_ajuste = (
+            df_agentes[col_ag].astype(str).str.strip().str.replace("-", "", regex=False).unique().tolist()
+        )
 
         print("Paso 3/8: Unificando datos...")
         # Normalizar el maestro actual
@@ -131,6 +153,12 @@ def ejecutar_proceso_reposicion(
                 df_union[cols_numericas]
                 .apply(pd.to_numeric, errors="coerce")
                 .fillna(0)
+            )
+        # SUBSEGMENTACION se usa como multiplicador; si quedó en 0 (celda vacía),
+        # usar 1 como valor neutro para no anular todas las reposiciones
+        if "SUBSEGMENTACION" in df_union.columns:
+            df_union["SUBSEGMENTACION"] = df_union["SUBSEGMENTACION"].where(
+                df_union["SUBSEGMENTACION"] != 0, 1
             )
 
         print("Paso 5/8: Calculando stock ajustado...")
@@ -198,10 +226,14 @@ def ejecutar_proceso_reposicion(
         print("Paso 8/8: Generando archivo final...")
         df_union.reset_index(inplace=True)
 
-        col_nombre = next(
-            (c for c in df_union.columns if "NOMBRE FANTASIA" in c and c.endswith("_m3")),
-            next((c for c in df_union.columns if "NOMBRE FANTASIA" in c), None),
+        # Preferir "NOMBRE FANTASIA" del maestro actual (columna sin sufijo, cubre todos los
+        # agentes). Si no existe, usar la versión _m3 (histórico M-1) como respaldo.
+        _col_mae  = "NOMBRE FANTASIA" if "NOMBRE FANTASIA" in df_union.columns else None
+        _col_hist = next(
+            (c for c in df_union.columns if "NOMBRE FANTASIA" in c and c != "NOMBRE FANTASIA"),
+            None,
         )
+        col_nombre = _col_mae or _col_hist
 
         pedidos = []
         skus_canal_propio = reglas.get("skus_ajuste_canal_propio", [])
@@ -211,14 +243,21 @@ def ejecutar_proceso_reposicion(
             cols_ext = ["ID P.F", "PROV", "SEGMENTO", col_repo]
             if col_nombre:
                 cols_ext.append(col_nombre)
+            if _col_hist and _col_hist not in cols_ext:
+                cols_ext.append(_col_hist)
 
             df_p = df_union[[c for c in cols_ext if c in df_union.columns]].copy()
             ren = {col_repo: "CANTIDAD"}
-            if col_nombre:
+            if col_nombre and col_nombre != "NOMBRE FANTASIA":
                 ren[col_nombre] = "NOMBRE FANTASIA"
             df_p.rename(columns=ren, inplace=True)
-            if "NOMBRE FANTASIA" not in df_p.columns:
-                df_p["NOMBRE FANTASIA"] = "SIN DATOS"
+
+            if "NOMBRE FANTASIA" in df_p.columns and _col_hist and _col_hist in df_p.columns:
+                # Llenar vacíos del maestro con los nombres del histórico
+                df_p["NOMBRE FANTASIA"] = df_p["NOMBRE FANTASIA"].fillna(df_p[_col_hist]).fillna("")
+                df_p.drop(columns=[_col_hist], inplace=True, errors="ignore")
+            elif "NOMBRE FANTASIA" not in df_p.columns:
+                df_p["NOMBRE FANTASIA"] = ""
 
             df_p["SKU"]        = prod["sku_base"]
             df_p["DESCRIPCION"] = prod["desc_base"]

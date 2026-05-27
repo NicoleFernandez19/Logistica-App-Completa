@@ -3,7 +3,7 @@ from .estilos import configurar_tema, NEGRO, AMARILLO, AMARILLO_DARK, BLANCO, GR
 from .componentes import IndicadorPasos
 
 _PASOS = ["Archivos\nConsumo", "Consumo", "Archivos\nReposición", "Pedidos"]
-_N_CONSUMO     = 9   # archivos requeridos en paso 1
+_N_CONSUMO     = 11  # archivos requeridos en paso 1
 _N_REPOSICION  = 5   # maestro actual + 3 historicos + agentes
 
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
-                      GRIS_TEXTO, GRIS_BORDE, VERDE, VERDE_BG, ROJO, FONT_MONO)
+                      GRIS_TEXTO, GRIS_BORDE)
 from .componentes import TablaWidget
 from ..config import REGLAS, AGENTES_A_EXCLUIR
 
@@ -177,6 +177,7 @@ class Paso4Resultados(ctk.CTkFrame):
         self._log_clear()
         self._progress.pack(pady=(0, 16))
         self._progress.start()
+        self._cola_intentos = 0
 
         threading.Thread(target=self._hilo_reposicion, daemon=True).start()
         self.after(150, self._revisar_cola)
@@ -201,6 +202,24 @@ class Paso4Resultados(ctk.CTkFrame):
             params  = self._get_params()
             productos = self._get_productos()
 
+            _requeridos = {
+                "consumo_mes_1": "Consumo M-3",
+                "consumo_mes_2": "Consumo M-2",
+                "consumo_mes_3": "Consumo M-1",
+                "agentes":       "Agentes Canal Propio",
+            }
+            faltantes = [lbl for k, lbl in _requeridos.items() if k not in paths]
+            if faltantes:
+                raise ValueError(
+                    "Archivos faltantes para calcular la reposición:\n"
+                    + "\n".join(f"  • {lbl}" for lbl in faltantes)
+                )
+            if maestro is None:
+                raise ValueError(
+                    "No hay Maestro Stock disponible.\n"
+                    "Complete el Paso 2 o seleccione un archivo en Paso 3 → Maestro Stock Actual."
+                )
+
             rutas_consumos = {
                 k: paths[k] for k in ("consumo_mes_1", "consumo_mes_2", "consumo_mes_3")
             }
@@ -216,6 +235,8 @@ class Paso4Resultados(ctk.CTkFrame):
                 agentes_excluir=AGENTES_A_EXCLUIR,
             )
             self._q.put(("done", (ok, msg, df_det, df_fin)))
+        except (ValueError, KeyError) as exc:
+            self._q.put(("done", (False, str(exc), None, None)))
         except Exception as exc:
             import traceback
             self._q.put(("done", (False, f"{exc}\n\n{traceback.format_exc()}", None, None)))
@@ -226,6 +247,14 @@ class Paso4Resultados(ctk.CTkFrame):
         try:
             tag, data = self._q.get_nowait()
         except q_module.Empty:
+            self._cola_intentos += 1
+            if self._cola_intentos > 2000:  # ~5 minutos a 150 ms por intento
+                self._progress.stop()
+                self._progress.pack_forget()
+                self._btn_calc.configure(
+                    state="normal", text="  CALCULAR REPOSICIÓN  ")
+                self._log_write("\n✗ Tiempo de espera agotado. Intente nuevamente.")
+                return
             self.after(150, self._revisar_cola)
             return
 
@@ -244,9 +273,7 @@ class Paso4Resultados(ctk.CTkFrame):
                 try:
                     self._cargar_tabla(df_fin)
                 except Exception as exc:
-                    import traceback
-                    messagebox.showerror("Error mostrando tabla",
-                                         f"{exc}\n\n{traceback.format_exc()[:400]}")
+                    messagebox.showerror("Error mostrando tabla", str(exc))
                 productos = self._get_productos()
                 self._cb_prod.configure(
                     values=["(Todos)"] + [p.get("desc_base", "") for p in productos]
@@ -304,8 +331,11 @@ class Paso4Resultados(ctk.CTkFrame):
             while destino.exists():
                 destino = data_old_dir / f"{p.stem}_{fecha}_{contador}{p.suffix}"
                 contador += 1
-            shutil.move(str(p), str(destino))
-            movidos += 1
+            try:
+                shutil.move(str(p), str(destino))
+                movidos += 1
+            except Exception as exc:
+                self._log_write(f"  No se pudo archivar '{p.name}': {exc}")
 
         if movidos:
             self._log_write(f"\nArchivados {movidos} archivo(s) en Data_OLD/ ({fecha})")

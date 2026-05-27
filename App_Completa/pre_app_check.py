@@ -14,6 +14,7 @@ REQUIRED_MODULES = {
     "pandas": "pandas",
     "numpy": "numpy",
     "openpyxl": "openpyxl",
+    "xlrd": "xlrd",
 }
 
 
@@ -75,7 +76,7 @@ def module_available(module_name):
     try:
         importlib.import_module(module_name)
         return True
-    except Exception:
+    except ImportError:
         return False
 
 
@@ -128,7 +129,7 @@ def check_dependencies():
 def check_tkinter():
     try:
         import tkinter  # noqa: F401
-    except Exception as exc:
+    except ImportError as exc:
         fail(f"tkinter no esta usable: {exc}")
         fail("Instale una distribucion normal de Python para Windows con Tcl/Tk.")
         return False
@@ -151,7 +152,7 @@ def check_app_import():
 
 
 def ensure_runtime_dirs():
-    for folder in ["Data", "Maestro_consumo"]:
+    for folder in ["Data", "Maestro_Consumo", "Data_OLD"]:
         path = APP_DIR / folder
         path.mkdir(exist_ok=True)
         ok(f"Carpeta lista: {folder}")

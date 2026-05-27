@@ -1,3 +1,6 @@
+import math
+from pathlib import Path
+
 import pandas as pd
 
 
@@ -7,26 +10,60 @@ def _leer(path):
     ext = str(path).rsplit(".", 1)[-1].lower() if "." in str(path) else ""
     es_zip = firma == b"PK\x03\x04"
     es_ole = firma[:4] == b"\xD0\xCF\x11\xE0"
-    if ext == "xlsx" or (es_zip and ext not in ("csv",)):
-        return pd.read_excel(path, dtype=str, engine="openpyxl")
-    if ext == "xls" or es_ole:
+    if ext == "xlsx" or es_zip:
+        df = pd.read_excel(path, dtype=str, engine="openpyxl")
+    elif ext == "xls" or es_ole:
         try:
-            return pd.read_excel(path, dtype=str, engine="xlrd")
+            df = pd.read_excel(path, dtype=str, engine="xlrd")
         except Exception:
-            return pd.read_excel(path, dtype=str, engine="openpyxl")
-    ultimo_error = None
-    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin1"):
-        try:
-            return pd.read_csv(path, dtype=str, encoding=encoding)
-        except UnicodeDecodeError as exc:
-            ultimo_error = exc
-    raise ultimo_error
+            df = pd.read_excel(path, dtype=str, engine="openpyxl")
+    else:
+        ultimo_error = None
+        df = None
+        for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin1"):
+            try:
+                df = pd.read_csv(path, dtype=str, encoding=encoding)
+                # Si hay solo una columna o el parser falla, el separador es ";" (Excel argentino)
+                # En ese formato la coma es separador decimal, no de miles
+                if len(df.columns) <= 1:
+                    df = pd.read_csv(path, dtype=str, encoding=encoding, sep=";")
+                    df.attrs["decimal_coma"] = True
+                break
+            except pd.errors.ParserError:
+                try:
+                    df = pd.read_csv(path, dtype=str, encoding=encoding, sep=";")
+                    df.attrs["decimal_coma"] = True
+                    break
+                except Exception:
+                    pass
+            except UnicodeDecodeError as exc:
+                ultimo_error = exc
+        if df is None:
+            raise ultimo_error
+    df.columns = df.columns.str.strip()
+    return df
 
 
 def _num(df, cols):
+    # En CSVs con separador ";" (formato argentino/europeo) la coma es decimal, no miles
+    decimal_coma = df.attrs.get("decimal_coma", False)
     for c in cols:
         if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+            s = df[c].astype(str).str.strip()
+            if decimal_coma:
+                # Formato argentino: punto=miles ("1.234"), coma=decimal ("3,468" → 3.468)
+                s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            elif s.str.contains(',', na=False).any():
+                muestra = s[s.str.contains(',', na=False)].head(30)
+                # Coma como miles: TODOS los valores con coma deben tener exactamente 3 dígitos
+                # Usar .all() evita que un valor decimal (ej: "1,5") sea mal tratado como "15"
+                es_miles = muestra.str.match(r'^\d{1,3}(,\d{3})+$').all()
+                if es_miles:
+                    s = s.str.replace(',', '', regex=False)
+                else:
+                    # Coma como decimal: "1.234,56" → "1234.56"
+                    s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            df[c] = pd.to_numeric(s, errors="coerce").fillna(0)
     return df
 
 
@@ -34,10 +71,29 @@ def _strip_id(s):
     return s.astype(str).str.strip().str.replace("-", "", regex=False)
 
 
+def _validar(df, cols, path):
+    """Lanza ValueError descriptivo si alguna columna requerida no está en el DataFrame."""
+    faltantes = [c for c in cols if c not in df.columns]
+    if not faltantes:
+        return
+    nombre = Path(path).name
+    disponibles = list(df.columns[:30])
+    raise ValueError(
+        f"Archivo '{nombre}': columna(s) requeridas no encontradas: {faltantes}\n"
+        f"Columnas disponibles en el archivo: {disponibles}"
+    )
+
+
 def cargar_tiv(path):
     df = _leer(path)
+    if df.empty:
+        raise ValueError(f"Archivo '{Path(path).name}': sin datos (0 filas).")
+    _validar(df, ["ID_PF"], path)
     df["ID_PF"] = _strip_id(df["ID_PF"])
+    n_antes = len(df)
     df = df.drop_duplicates(subset="ID_PF")
+    if len(df) < n_antes:
+        print(f"  ADVERTENCIA: {Path(path).name}: {n_antes - len(df)} ID_PF duplicados eliminados.")
     df = df.rename(columns={
         "BP + TU":   "BP_TU",
         "BP+TU":     "BP_TU",
@@ -52,14 +108,27 @@ def cargar_tiv(path):
     })
     _num(df, ["BP_TU", "TX_QCASH", "TXS_SIN_FAC", "TX_IMT_OB", "TX_IMT_IB",
               "TX_DMT_OB", "TX_DMT_IB", "PRISMA_CI", "PRISMA_CO"])
+    _cols_tx = ["BP_TU", "TX_IMT_OB", "TX_IMT_IB", "TX_DMT_OB", "TX_DMT_IB"]
+    if not any(c in df.columns for c in _cols_tx):
+        raise ValueError(
+            f"Archivo '{Path(path).name}': ninguna columna de transacciones reconocida.\n"
+            f"Esperadas (al menos una de): {_cols_tx}\n"
+            f"Columnas disponibles: {list(df.columns)}"
+        )
     return df
 
 
 def cargar_maestro(path):
     df = _leer(path)
+    if df.empty:
+        raise ValueError(f"Archivo '{Path(path).name}': sin datos (0 filas).")
     df = df.rename(columns={"ID P.F": "ID_PF"})
+    _validar(df, ["ID_PF"], path)
     df["ID_PF"] = _strip_id(df["ID_PF"])
+    n_antes = len(df)
     df = df.drop_duplicates(subset="ID_PF")
+    if len(df) < n_antes:
+        print(f"  ADVERTENCIA: {Path(path).name}: {n_antes - len(df)} ID_PF duplicados eliminados.")
     df = df.rename(columns={
         "NOMBRE FANTASIA":           "NOMBRE_FANTASIA",
         "STOCK ROLLO":               "STOCK_ROLLO_ANT",
@@ -70,55 +139,74 @@ def cargar_maestro(path):
         "STOCK_ROLLO_MES ANTERIOR":  "STOCK_ROLLO_ANT",
         "STOCK_SUBE_MES ANTERIOR":   "STOCK_SUBE_ANT",
         "STOCK_PRISMA_MES ANTERIOR": "STOCK_PRISMA_ANT",
+        "STOCK RESMA":               "STOCK_RESMA_ANT",
+        "STOCK_RESMA":               "STOCK_RESMA_ANT",
+        "STOCK_RESMA_MES ANTERIOR":  "STOCK_RESMA_ANT",
     })
-    _num(df, ["STOCK_ROLLO_ANT", "STOCK_SUBE_ANT", "STOCK_PRISMA_ANT"])
+    _num(df, ["STOCK_ROLLO_ANT", "STOCK_SUBE_ANT", "STOCK_PRISMA_ANT", "STOCK_RESMA_ANT"])
+    # Si el archivo tenía variantes de la misma columna (ej: "STOCK SUBE" y "STOCK_SUBE"),
+    # el rename produce duplicados; nos quedamos con la primera aparición.
+    df = df.loc[:, ~df.columns.duplicated(keep="first")]
     return df
 
 
 def cargar_fac_termicas(path):
     df = _leer(path)
+    _validar(df, ["ID_PF"], path)
     df["ID_PF"] = _strip_id(df["ID_PF"])
     return df
 
 
 def cargar_dsp_kyc(path):
     df = _leer(path)
+    _validar(df, ["ID_PF", "FLAG_DSP", "FLAG_KYC"], path)
     df["ID_PF"] = _strip_id(df["ID_PF"])
+    n_antes = len(df)
     df = df.drop_duplicates(subset="ID_PF")
+    if len(df) < n_antes:
+        print(f"  ADVERTENCIA: {Path(path).name}: {n_antes - len(df)} ID_PF duplicados eliminados.")
     _num(df, ["FLAG_DSP", "FLAG_KYC"])
     return df
 
 
 def cargar_com_tx_int(path):
     df = _leer(path)
+    _validar(df, ["ID_PF"], path)
     df["ID_PF"] = _strip_id(df["ID_PF"])
     return df
 
 
 def cargar_rollo_env(path):
     df = _leer(path)
+    _validar(df, ["AGENTE", "CANTIDAD"], path)
     df["AGENTE"] = _strip_id(df["AGENTE"])
     df = df.rename(columns={"CANTIDAD": "ROLLOS"})
     _num(df, ["ROLLOS"])
+    df = df.groupby("AGENTE", as_index=False)["ROLLOS"].sum()
     return df
 
 
 def cargar_prisma(path):
     df = _leer(path)
+    _validar(df, ["AGENTE", "CANTIDAD"], path)
     df["AGENTE"] = _strip_id(df["AGENTE"])
     _num(df, ["CANTIDAD"])
+    df = df.groupby("AGENTE", as_index=False)["CANTIDAD"].sum()
     return df
 
 
 def cargar_sube(path):
     df = _leer(path)
+    _validar(df, ["AGENTE", "CANTIDAD"], path)
     df["AGENTE"] = _strip_id(df["AGENTE"])
     _num(df, ["CANTIDAD"])
+    df = df.groupby("AGENTE", as_index=False)["CANTIDAD"].sum()
     return df
 
 
 def cargar_trx_sube(path):
     df = _leer(path)
+    _validar(df, ["ID_PF", "TRX_SUBE"], path)
     df["ID_PF"] = _strip_id(df["ID_PF"])
     _num(df, ["TRX_SUBE"])
     df = df.groupby("ID_PF", as_index=False)["TRX_SUBE"].sum()
@@ -132,6 +220,25 @@ def cargar_consumo_mes(path):
         df = df.rename(columns={"ID_PF": "ID P.F"})
     if "ID P.F" in df.columns:
         df["ID P.F"] = df["ID P.F"].astype(str).str.strip().str.replace("-", "", regex=False)
+    return df
+
+
+def cargar_resma_env(path):
+    df = _leer(path)
+    _validar(df, ["AGENTE", "CANTIDAD"], path)
+    df["AGENTE"] = _strip_id(df["AGENTE"])
+    df = df.rename(columns={"CANTIDAD": "RESMAS"})
+    _num(df, ["RESMAS"])
+    df = df.groupby("AGENTE", as_index=False)["RESMAS"].sum()
+    return df
+
+
+def cargar_fajas(path):
+    df = _leer(path)
+    _validar(df, ["ID_PF", "Qx FAJAS"], path)
+    df["ID_PF"] = _strip_id(df["ID_PF"])
+    _num(df, ["Qx FAJAS"])
+    df["FAJAS"] = df["Qx FAJAS"].apply(lambda x: math.ceil(x / 200) if x > 0 else 0)
     return df
 
 

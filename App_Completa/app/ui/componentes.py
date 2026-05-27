@@ -3,7 +3,7 @@ from tkinter import ttk
 import customtkinter as ctk
 from .estilos import (AMARILLO, NEGRO, BLANCO, GRIS_BG, GRIS_BORDE,
                       GRIS_TEXTO, GRIS_DARK, VERDE, VERDE_BG, ROJO, ROJO_BG,
-                      FONT_SMALL, aplicar_estilo_tabla)
+                      aplicar_estilo_tabla)
 
 
 class TablaWidget(ctk.CTkFrame):

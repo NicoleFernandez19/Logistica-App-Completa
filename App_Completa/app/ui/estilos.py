@@ -20,12 +20,8 @@ AZUL_INFO     = "#2563EB"
 INFO_BG       = "#F1F5F9"
 INFO_BORDE    = "#CBD5E1"
 
-# Fuentes
-FONT_TITLE   = ("Segoe UI", 22, "bold")
-FONT_HEADING = ("Segoe UI", 15, "bold")
-FONT_BODY    = ("Segoe UI", 13)
-FONT_SMALL   = ("Segoe UI", 11)
-FONT_MONO    = ("Consolas", 11)
+FONT_SMALL = ("Segoe UI", 11)
+FONT_MONO  = ("Consolas", 11)
 
 
 def configurar_tema():

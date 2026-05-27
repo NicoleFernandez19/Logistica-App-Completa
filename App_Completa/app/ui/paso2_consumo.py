@@ -8,18 +8,20 @@ from tkinter import filedialog, messagebox
 import pandas as pd
 import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
-                      GRIS_TEXTO, VERDE, VERDE_BG, ROJO, NARANJA, INFO_BG, GRIS_BORDE)
+                      GRIS_TEXTO, VERDE, VERDE_BG, ROJO, INFO_BG, GRIS_BORDE)
 from .componentes import TablaWidget, PanelMetrica
 
 _METRICAS = [
     ("CONSUMO\nROLLOS",   "consumo_rollo"),
+    ("CONSUMO\nRESMAS",   "consumo_resma"),
+    ("FAJAS",             "fajas"),
     ("BOLSAS\nVERDES",    "bolsa_verde"),
     ("BOLSAS\nMAGENTA",   "bolsa_magenta"),
     ("BOLSAS\nRECOLEC.",  "bolsa_recolec"),
-    ("TRX\nPRISMA",       "trx_prisma"),
     ("ROLLOS\nPRISMA",    "rollo_prisma"),
     ("ROLLOS\nSUBE",      "rollo_sube"),
     ("STOCK\nROLLOS",     "stock_rollo"),
+    ("STOCK\nRESMAS",     "stock_resma"),
     ("STOCK\nSUBE",       "stock_sube"),
     ("STOCK\nPRISMA",     "stock_prisma"),
 ]
@@ -159,7 +161,8 @@ class Paso2Consumo(ctk.CTkFrame):
         ).pack(side="left", padx=14)
 
         cols = ["ID P.F", "FLAG DSP", "TIPO", "NOMBRE FANTASIA",
-                "CANAL", "PROV", "ROLLO", "BOLSA RECOL.", "ROLLO SUBE", "ROLLO PRISMA"]
+                "CANAL", "PROV", "ROLLO", "BOLSA RECOL.", "ROLLO SUBE", "ROLLO PRISMA",
+                "RESMA", "FAJAS"]
         anchos = {"NOMBRE FANTASIA": 180, "CANAL": 140, "ID P.F": 80}
         self._tbl_consumo = TablaWidget(tab, cols, anchos, fg_color=GRIS_BG)
         self._tbl_consumo.pack(fill="both", expand=True)
@@ -181,8 +184,8 @@ class Paso2Consumo(ctk.CTkFrame):
         ).pack(side="left", padx=14)
 
         cols = ["ID P.F", "NOMBRE FANTASIA", "PROV", "DEP",
-                "SEGMENTO", "SUBSEG.", "STOCK ROLLO", "STOCK SUBE",
-                "STOCK PRISMA", "⚠"]
+                "SEGMENTO", "SUBSEG.", "STOCK ROLLO", "STOCK RESMA",
+                "STOCK SUBE", "STOCK PRISMA", "⚠"]
         anchos = {"NOMBRE FANTASIA": 180, "ID P.F": 80, "⚠": 40}
         self._tbl_stock = TablaWidget(tab, cols, anchos, fg_color=GRIS_BG)
         self._tbl_stock.pack(fill="both", expand=True)
@@ -245,6 +248,7 @@ class Paso2Consumo(ctk.CTkFrame):
         self._btn_calc.configure(state="disabled", text="  Calculando...  ")
         self._lbl_status.configure(text="Leyendo archivos...", text_color=GRIS_TEXTO)
         self.update_idletasks()
+        self._cola_intentos = 0
         threading.Thread(target=self._hilo_calculo, daemon=True).start()
         self.after(150, self._revisar_cola)
 
@@ -254,10 +258,24 @@ class Paso2Consumo(ctk.CTkFrame):
                 cargar_tiv, cargar_maestro, cargar_fac_termicas,
                 cargar_dsp_kyc, cargar_com_tx_int,
                 cargar_prisma, cargar_sube, cargar_rollo_env, cargar_trx_sube,
+                cargar_resma_env, cargar_fajas,
             )
             from ..logic.calculos_consumo import calcular, preparar_maestro_exportable
 
             paths = self._get_paths()
+            _obligatorios = {
+                "tiv": "TIV", "maestro": "Maestro Consumo",
+                "fac_termicas": "FAC. TERMICAS", "dsp_kyc": "DSP / KYC",
+                "com_tx_int": "COM TX INT", "prisma": "PRISMA",
+                "sube": "SUBE", "rollo_env": "ROLLO (envíos)", "trx_sube": "TRX SUBE",
+                "resma_env": "RESMA (envíos)", "fajas": "FAJAS",
+            }
+            faltantes = [lbl for k, lbl in _obligatorios.items() if k not in paths]
+            if faltantes:
+                raise ValueError(
+                    "Archivos no seleccionados:\n"
+                    + "\n".join(f"  • {lbl}" for lbl in faltantes)
+                )
             tiv        = cargar_tiv(paths["tiv"])
             maestro    = cargar_maestro(paths["maestro"])
             fac        = cargar_fac_termicas(paths["fac_termicas"])
@@ -267,13 +285,18 @@ class Paso2Consumo(ctk.CTkFrame):
             sube       = cargar_sube(paths["sube"])
             rollo_env  = cargar_rollo_env(paths["rollo_env"])
             trx        = cargar_trx_sube(paths["trx_sube"])
+            resma_env  = cargar_resma_env(paths["resma_env"]) if "resma_env" in paths else None
+            fajas      = cargar_fajas(paths["fajas"]) if "fajas" in paths else None
 
             df_tiv, df_mae = calcular(
                 tiv, maestro, fac, prisma, sube, trx,
                 dsp_kyc, com_tx_int, rollo_env,
+                resma_env=resma_env, fajas=fajas,
             )
             df_repo = preparar_maestro_exportable(df_tiv, df_mae)
             self._q.put(("ok", (df_tiv, df_mae, df_repo)))
+        except (ValueError, KeyError) as exc:
+            self._q.put(("error", str(exc)))
         except Exception as exc:
             import traceback
             self._q.put(("error", f"{exc}\n\n{traceback.format_exc()}"))
@@ -282,6 +305,14 @@ class Paso2Consumo(ctk.CTkFrame):
         try:
             msg, data = self._q.get_nowait()
         except q_module.Empty:
+            self._cola_intentos += 1
+            if self._cola_intentos > 2000:  # ~5 minutos a 150 ms por intento
+                self._btn_calc.configure(state="normal", text="  CALCULAR CONSUMO  ")
+                self._lbl_status.configure(
+                    text="Tiempo de espera agotado. Intente nuevamente.",
+                    text_color=ROJO,
+                )
+                return
             self.after(150, self._revisar_cola)
             return
 
@@ -295,9 +326,7 @@ class Paso2Consumo(ctk.CTkFrame):
                 self._poblar_tablas(df_tiv, df_mae)
                 self._mostrar_metricas(df_tiv, df_mae)
             except Exception as exc:
-                import traceback
-                messagebox.showerror("Error mostrando resultados",
-                                     f"{exc}\n\n{traceback.format_exc()[:600]}")
+                messagebox.showerror("Error mostrando resultados", str(exc))
             self._mostrar_zona("post")
             self._btn_calc.configure(state="normal",
                                      text="  CALCULAR CONSUMO  ")
@@ -314,14 +343,15 @@ class Paso2Consumo(ctk.CTkFrame):
     def _mostrar_metricas(self, t, m):
         f = lambda v: f"{v:,.1f}"
         self._mvar["consumo_rollo"].set(f(t["ROLLOS"].sum()))
+        self._mvar["consumo_resma"].set(f(t["RESMA"].sum() if "RESMA" in t.columns else 0))
+        self._mvar["fajas"].set(f(t["FAJAS"].sum() if "FAJAS" in t.columns else 0))
         self._mvar["bolsa_verde"].set(f(t["BOLSAS_VERDES"].sum()))
         self._mvar["bolsa_magenta"].set(f(t["BOLSAS_MAGENTA"].sum()))
         self._mvar["bolsa_recolec"].set(f(t["BOLSAS_RECOLECCION"].sum()))
-        prisma_trx = t["PRISMA_CI"].sum() + t["PRISMA_CO"].sum() if "PRISMA_CI" in t.columns else 0
-        self._mvar["trx_prisma"].set(f(prisma_trx))
         self._mvar["rollo_prisma"].set(f(t["ROLLO_PRISMA"].sum()))
         self._mvar["rollo_sube"].set(f(t["ROLLO_SUBE"].sum()))
         self._mvar["stock_rollo"].set(f(m["STOCK_ROLLO"].sum()))
+        self._mvar["stock_resma"].set(f(m["STOCK_RESMA"].sum() if "STOCK_RESMA" in m.columns else 0))
         self._mvar["stock_sube"].set(f(m["STOCK_SUBE"].sum()))
         self._mvar["stock_prisma"].set(f(m["STOCK_PRISMA"].sum()))
 
@@ -385,6 +415,8 @@ class Paso2Consumo(ctk.CTkFrame):
                 fmt.format(r.get("BOLSAS_RECOLECCION", 0)),
                 fmt.format(r.get("ROLLO_SUBE", 0)),
                 fmt.format(r.get("ROLLO_PRISMA", 0)),
+                fmt.format(r.get("RESMA", 0)),
+                fmt.format(r.get("FAJAS", 0)),
             ))
         self._tbl_consumo.cargar(filas)
 
@@ -416,6 +448,7 @@ class Paso2Consumo(ctk.CTkFrame):
                 r.get("SEGMENTO", ""),
                 r.get("SUBSEGMENTACION", ""),
                 fmt.format(r.get("STOCK_ROLLO", 0)),
+                fmt.format(r.get("STOCK_RESMA", 0)),
                 fmt.format(r.get("STOCK_SUBE", 0)),
                 fmt.format(r.get("STOCK_PRISMA", 0)),
                 "⚠ SÍ" if neg else "OK",
@@ -435,6 +468,12 @@ class Paso2Consumo(ctk.CTkFrame):
                                "STOCK_ROLLO_ANT", "STOCK_SUBE_ANT", "STOCK_PRISMA_ANT",
                                "STOCK_ROLLO", "STOCK_SUBE", "STOCK_PRISMA"] if c in m.columns]
         merged = t[t_cols].merge(m[m_cols], on="ID_PF", how="left")
+        num_cols = merged.select_dtypes(include="number").columns
+        merged[num_cols] = merged[num_cols].fillna(0)
+        if "NOMBRE_FANTASIA" in merged.columns:
+            merged["NOMBRE_FANTASIA"] = merged["NOMBRE_FANTASIA"].fillna("")
+        if "CANAL_AGENTE_AGRUP" in merged.columns:
+            merged["CANAL_AGENTE_AGRUP"] = merged["CANAL_AGENTE_AGRUP"].fillna("")
         filas = []
         for _, r in merged.iterrows():
             filas.append((
@@ -462,7 +501,8 @@ class Paso2Consumo(ctk.CTkFrame):
         t, m = self._df_tiv, self._df_maestro
 
         consumo_cols = ["ID_PF", "FLAG_DSP_KYC", "TIPO_AGENTE", "NOMBRE_FANTASIA",
-                        "ROLLOS", "BOLSAS_RECOLECCION", "ROLLO_SUBE", "ROLLO_PRISMA"]
+                        "ROLLOS", "BOLSAS_RECOLECCION", "ROLLO_SUBE", "ROLLO_PRISMA",
+                        "RESMA", "FAJAS"]
         consumo = t[[c for c in consumo_cols if c in t.columns]].copy()
         consumo = consumo.rename(columns={
             "ID_PF": "ID P.F", "TIPO_AGENTE": "TIPO",
@@ -473,12 +513,12 @@ class Paso2Consumo(ctk.CTkFrame):
 
         stock_cols = ["ID_PF", "NOMBRE_FANTASIA", "PROV", "DEP",
                       "SEGMENTO", "SUBSEGMENTACION",
-                      "STOCK_ROLLO", "STOCK_SUBE", "STOCK_PRISMA"]
+                      "STOCK_ROLLO", "STOCK_RESMA", "STOCK_SUBE", "STOCK_PRISMA"]
         stock = m[[c for c in stock_cols if c in m.columns]].copy()
         stock = stock.rename(columns={
             "ID_PF": "ID P.F", "NOMBRE_FANTASIA": "NOMBRE FANTASIA",
-            "STOCK_ROLLO": "STOCK ROLLO", "STOCK_SUBE": "STOCK SUBE",
-            "STOCK_PRISMA": "STOCK PRISMA",
+            "STOCK_ROLLO": "STOCK ROLLO", "STOCK_RESMA": "STOCK RESMA",
+            "STOCK_SUBE": "STOCK SUBE", "STOCK_PRISMA": "STOCK PRISMA",
         })
 
         t_cols = [c for c in ["ID_PF", "NOMBRE_FANTASIA", "CANAL_AGENTE_AGRUP",
@@ -509,19 +549,26 @@ class Paso2Consumo(ctk.CTkFrame):
                   7:"JULIO",8:"AGOSTO",9:"SEPTIEMBRE",10:"OCTUBRE",11:"NOVIEMBRE",12:"DICIEMBRE"}
         now = datetime.now()
         nombre = f"MAESTRO_CONSUMO_ENVIO_{_MESES[now.month]}_{now.year}.xlsx"
-        carpeta = Path(sys.argv[0]).resolve().parent / "Maestro_consumo"
+        carpeta = Path(sys.argv[0]).resolve().parent / "Maestro_Consumo"
         carpeta.mkdir(exist_ok=True)
         return carpeta / nombre
 
     def _auto_guardar(self):
-        """Guarda silenciosamente en Maestro_consumo/ al terminar el cálculo."""
+        """Guarda en Maestro_Consumo/. Si ya existe el archivo del mes, lo renombra como _anterior."""
         if self._df_tiv is None:
             return
         destino = self._destino_maestro()
+        if destino.exists():
+            import shutil
+            backup = destino.with_name(destino.stem + "_anterior" + destino.suffix)
+            try:
+                shutil.copy2(str(destino), str(backup))
+            except Exception:
+                pass
         try:
             self._write_export_workbook(str(destino))
             self._lbl_status.configure(
-                text=f"Guardado: Maestro_consumo/{destino.name}",
+                text=f"Guardado: Maestro_Consumo/{destino.name}",
                 text_color=VERDE,
             )
         except Exception as exc:
@@ -539,7 +586,7 @@ class Paso2Consumo(ctk.CTkFrame):
             self._write_export_workbook(str(destino))
             messagebox.showinfo(
                 "Exportado",
-                f"MaestroStock guardado en:\nMaestro_consumo/{destino.name}",
+                f"MaestroStock guardado en:\nMaestro_Consumo/{destino.name}",
             )
         except Exception as exc:
             messagebox.showerror("Error al exportar", str(exc))

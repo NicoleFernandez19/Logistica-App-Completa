@@ -10,18 +10,6 @@ REGLAS = {
     "skus_ajuste_canal_propio": [9001222100, 9001222101],
 }
 
-COLUMNAS_MAESTRO = [
-    "ID P.F", "PROV", "DEP", "SEGMENTO", "SUBSEGMENTACION",
-    "STOCK ROLLO", "STOCK SUBE", "STOCK PRISMA",
-]
-
-COLUMNAS_CONSUMO = [
-    "ID P.F", "ROLLO", "BOLSA RECOLECCION",
-    "ROLLO PRISMA", "ROLLO SUBE",
-]
-
-COLUMNAS_AGENTES = ["ID P.F"]
-
 PRODUCTOS = [
     {
         "nombre_base": "ROLLO",
