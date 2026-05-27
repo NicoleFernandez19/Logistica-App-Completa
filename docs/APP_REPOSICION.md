@@ -15,7 +15,6 @@ App_Completa/
 ├── requirements.txt
 ├── Data/                     # Archivos de entrada del mes (se archivan al finalizar)
 ├── Data_OLD/                 # Histórico de archivos procesados
-├── Data_Test/                # Datos de prueba
 ├── Maestro_Consumo/          # Maestros mensuales (input y output del Paso 2)
 └── app/
     ├── config.py             # Parámetros, reglas y productos configurables
@@ -57,9 +56,11 @@ El usuario carga 11 archivos de entrada. La app auto-detecta los archivos desde 
 
 El botón **Siguiente** se habilita únicamente cuando los 11 archivos están cargados.
 
+**Auto-detección:** busca en `Data/` por substring en el nombre del archivo. El orden de detección garantiza que `trx_sube` tiene prioridad sobre `sube` para evitar asignaciones incorrectas. Cada archivo solo puede asignarse a un slot (pool sin reemplazo).
+
 ### Paso 2 — Cálculo de Consumo
 
-Ejecuta las fórmulas de consumo sobre los archivos del Paso 1 y muestra métricas y tablas de resultado. Al terminar, guarda automáticamente el MaestroStock en `Maestro_Consumo/MAESTRO_CONSUMO_ENVIO_{MES}_{AÑO}.xlsx`.
+Ejecuta las fórmulas de consumo sobre los archivos del Paso 1 y muestra métricas y tablas de resultado. Al terminar, guarda automáticamente el MaestroStock en `Maestro_Consumo/MAESTRO_CONSUMO_ENVIO_{MES}_{AÑO}.xlsx`. Si ya existe un archivo con ese nombre, se crea un backup con sufijo `_anterior` antes de sobreescribir.
 
 **Métricas mostradas:** Consumo Rollos, Consumo Resmas, Fajas, Bolsas Verdes, Bolsas Magenta, Bolsas Recolección, Rollos Prisma, Rollos SUBE, Stock Rollos, Stock Resmas, Stock SUBE, Stock Prisma.
 
@@ -166,8 +167,9 @@ AGENTE_NEGATIVO = (STOCK_ROLLO < 0) OR (STOCK_RESMA < 0)
 1. Lee los 3 archivos históricos (M-3, M-2, M-1) y les agrega sufijos `_m1`, `_m2`, `_m3`.
 2. Hace outer join de los 3 históricos y luego left join con el maestro actual.
 3. Convierte todas las columnas numéricas; rellena NaN con 0.
+4. Si `SUBSEGMENTACION` quedó en 0 (celda vacía), se reemplaza por 1 para no anular la reposición.
 
-### Stock ajustado
+### Stock ajustado (proyección al momento de entrega)
 
 ```
 STOCK_ROLLO  −= ROLLO_m3    (consumo M-1 como proxy del mes en curso)
@@ -179,57 +181,103 @@ RESETEO_PRISMA = max(STOCK_PRISMA, 0)
 RESETEO_SUBE   = max(STOCK_SUBE,   0)
 ```
 
+> El RESETEO representa el stock que el agente va a tener disponible cuando llegue el próximo pedido. Se descuenta del cálculo de reposición para no sobre-stockear.
+
 ### Regresión lineal (método "regresion")
 
 Con los tres puntos históricos (x=1,2,3):
 
 ```
-promedio  = (m1 + m2 + m3) / 3
-pendiente = (m3 − m1) / 2
-ordenada  = promedio − pendiente × 2
+promedio   = (m1 + m2 + m3) / 3
+pendiente  = (m3 − m1) / 2
+ordenada   = promedio − pendiente × 2
 prediccion = pendiente × 4 + ordenada   ← proyección mes 4
 
-repo = si pendiente ≤ 0 → (promedio × SUB × factor) − RESETEO
-       si pendiente > 0 → (prediccion × SUB × factor) − RESETEO
+repo = si pendiente ≤ 0 → (promedio × SUBSEGMENTACION × factor) − RESETEO
+       si pendiente > 0 → (prediccion × SUBSEGMENTACION × factor) − RESETEO
 ```
+
+Si la tendencia es descendente o plana se usa el promedio (conservador). Si es ascendente se usa la proyección (anticipa mayor demanda).
 
 ### Otros métodos
 
 - **promedio**: `(m1+m2+m3)/3 × SUBSEGMENTACION × factor`
-- **promedio\_ajustado\_dep**: igual al promedio con ceil, pero fuerza 0 si DEP == 1
-
-### Canal Propio
-
-Los agentes en el archivo de agentes Canal Propio reciben el cantidad calculada multiplicada por `ajuste_canal_propio` (default 0.82) para los SKUs configurados en `REGLAS`.
+- **promedio\_ajustado\_dep**: igual al promedio con ceil, pero fuerza 0 si `DEP == 1` (agentes dependientes no reciben ese producto)
 
 ### Redondeo
 
-Fracción ≤ umbral → floor; fracción > umbral → ceil. Umbral por producto (0.3 para rollos, 0.2 para Prisma).
+```
+fracción = valor − floor(valor)
+resultado = floor(valor) si fracción ≤ umbral
+            ceil(valor)  si fracción > umbral
+```
+
+Umbral por producto: 0.3 para rollos térmicos, 0.2 para Prisma, 0.3 para SUBE.
+
+### Canal Propio
+
+Los agentes listados en el archivo de agentes Canal Propio reciben la cantidad calculada multiplicada por `ajuste_canal_propio` (default 0.82) **solo para los SKUs configurados** en `REGLAS.skus_ajuste_canal_propio` (actualmente 9001222100 y 9001222101).
+
+### Normalización de IDs
+
+Todos los `ID P.F` / `ID_PF` se normalizan con `strip()` + eliminación de guiones (`-`) antes de cualquier join o comparación. Esto incluye los IDs del maestro actual, los históricos y el archivo de agentes Canal Propio.
+
+---
+
+## Reglas de negocio
+
+### Separación por provincia (MENDOZA)
+
+El producto **ROLLO TERMICO** (SKU 9001222100) excluye agentes con `PROV = "MENDOZA"` (`prov_excluir`). El producto **ROLLO TERMICO MZA** (SKU 9001222101) incluye solo agentes de Mendoza (`prov_filter`). Esto garantiza que cada agente recibe el SKU logístico correcto según su ubicación.
+
+### SUBSEGMENTACION como multiplicador
+
+`SUBSEGMENTACION` funciona como un multiplicador de la reposición base. Permite ajustar la cantidad a reponer según el volumen relativo del punto de venta dentro del segmento. Si el campo viene vacío o en 0, se trata como 1 (valor neutro) para no anular la reposición del agente.
+
+### DEP (Agentes Dependientes)
+
+Los agentes con `DEP = 1` son dependientes de otro punto de venta. En productos con método `promedio_ajustado_dep`, reciben reposición 0 porque el insumo se gestiona desde el punto principal.
+
+### Agentes sin TIV
+
+Un agente que no aparece en el TIV del mes (sin transacciones) no recibe insumos en el cálculo de consumo, pero sí puede recibir reposición si tiene consumo histórico en los 3 meses anteriores.
+
+### Stock negativo
+
+Si el stock calculado resulta negativo (el agente recibió menos insumos de los que consumió), `RESETEO` se fija en 0. El agente recibe la reposición completa sin descuento de stock.
+
+### Archivado automático
+
+Al finalizar el Paso 4 exitosamente, todos los archivos de `Data/` que fueron usados como entrada se mueven a `Data_OLD/` con el formato `<nombre>_YYYYMMDD.<ext>`. Esto evita reutilizar archivos del mes anterior en el siguiente ciclo.
+
+### Backup del MaestroStock
+
+Al guardar el MaestroStock al final del Paso 2, si ya existe un archivo con el mismo nombre en `Maestro_Consumo/`, se crea un backup con sufijo `_anterior` antes de sobreescribirlo.
 
 ---
 
 ## Productos configurados (`config.py`)
 
-| SKU | Descripción | Método | Factor |
-|---|---|---|---|
-| 9001222100 | ROLLO TERMICO PF-WU x5 (sin Mendoza) | regresion | factor\_ajuste\_rollos × 1.1 |
-| 9001222101 | ROLLO TERMICO MZA PF-WU x5 | regresion | factor\_ajuste\_rollos × 1.1 |
-| 9001219112 | BOLSA RECOLECCION x1 | promedio | — |
-| 9001223489 | ROLLO TERMICO DEBITO PRISMA x5 | regresion | — |
-| 9001214102 | ROLLO TERMICOS SUBE x5 | regresion | — |
+| SKU | Descripción | Método | Factor | Redondeo |
+|---|---|---|---|---|
+| 9001222100 | ROLLO TERMICO PF-WU x5 (excluye Mendoza) | regresion | 1.1 | 0.3 |
+| 9001222101 | ROLLO TERMICO MZA PF-WU x5 (solo Mendoza) | regresion | 1.1 | 0.3 |
+| 9001219112 | BOLSA RECOLECCION x1 | promedio | — | — |
+| 9001223489 | ROLLO TERMICO DEBITO PRISMA x5 | regresion | — | 0.2 |
+| 9001214102 | ROLLO TERMICOS SUBE x5 | regresion | — | 0.3 |
 
 ---
 
 ## Archivos de entrada — formatos esperados
 
 ### TIV
-Columnas requeridas: `ID_PF`, `BP + TU` (o `BP+TU`), `TXS S/FAC`, `TX IMT OB`, `TX IMT IB`, `TX DMT OB`, `TX DMT IB`, `PRISMA CI`, `PRISMA CO`. Opcional: `TX QCASH`.
+Columnas requeridas: `ID_PF`, al menos una de `BP + TU` / `BP+TU`, `TX IMT OB`, `TX IMT IB`, `TX DMT OB`, `TX DMT IB`, `PRISMA CI`, `PRISMA CO`. Opcionales: `TX_QCASH`, `TXS S/FAC`. Si alguna columna de transacciones está ausente, se asigna 0 automáticamente.
 
 ### Maestro Consumo
-Columnas requeridas: `ID P.F` (o `ID_PF`), `NOMBRE FANTASIA`, `STOCK ROLLO`, `STOCK SUBE`, `STOCK PRISMA`. Opcional: `STOCK RESMA`, `PROV`, `DEP`, `SEGMENTO`, `SUBSEGMENTACION`.
+Columnas requeridas: `ID P.F` (o `ID_PF`). Opcionales: `NOMBRE FANTASIA`, `STOCK ROLLO`, `STOCK SUBE`, `STOCK PRISMA`, `STOCK RESMA`, `PROV`, `DEP`, `SEGMENTO`, `SUBSEGMENTACION`. Acepta variantes con guion bajo (`STOCK_ROLLO`) y con sufijo (`STOCK_ROLLO_MES ANTERIOR`).
 
 ### Envíos (PRISMA, SUBE, ROLLO, RESMA)
-Columnas: `AGENTE`, `CANTIDAD`. Se agrupa por `AGENTE` con suma.
+Columnas: `AGENTE`, `CANTIDAD`. Se agrupa por `AGENTE` con suma (permite múltiples filas por agente).
 
 ### TRX SUBE
 Columnas: `ID_PF`, `TRX_SUBE`. Se agrupa por `ID_PF` con suma.
@@ -238,14 +286,17 @@ Columnas: `ID_PF`, `TRX_SUBE`. Se agrupa por `ID_PF` con suma.
 Columna requerida: `ID_PF`.
 
 ### DSP / KYC
-Columnas: `ID_PF`, `FLAG_DSP`, `FLAG_KYC`.
+Columnas requeridas: `ID_PF`, `FLAG_DSP`, `FLAG_KYC`.
 
 ### FAJAS
-Columnas: `ID_PF`, `Qx FAJAS`.
+Columnas: `ID_PF`, `Qx FAJAS`. La columna `FAJAS` se calcula como `ceil(Qx FAJAS / 200)`.
 
 ### Maestros históricos (Paso 3)
-Deben tener el formato del MaestroStock exportado por Paso 2:
-`ID P.F`, `NOMBRE FANTASIA`, `PROV`, `DEP`, `SEGMENTO`, `SUBSEGMENTACION`, `STOCK ROLLO`, `STOCK SUBE`, `STOCK PRISMA`, `STOCK RESMA`, `TIPO`, `FLAG_DSP_KYC`, `ROLLO`, `BOLSA RECOLECCION`, `ROLLO SUBE`, `ROLLO PRISMA`, `RESMA`, `FAJAS`.
+Deben tener el formato del MaestroStock exportado por Paso 2 con columna `ID P.F` (o `ID_PF`):
+`NOMBRE FANTASIA`, `PROV`, `DEP`, `SEGMENTO`, `SUBSEGMENTACION`, `STOCK ROLLO`, `STOCK SUBE`, `STOCK PRISMA`, `TIPO`, `ROLLO`, `BOLSA RECOLECCION`, `ROLLO SUBE`, `ROLLO PRISMA`, `RESMA`, `FAJAS`.
+
+### Agentes Canal Propio
+Columna requerida: `ID P.F` (o `ID_PF`). Solo se usa para identificar qué agentes reciben el ajuste del 18%.
 
 ---
 
@@ -258,7 +309,16 @@ La app soporta automáticamente dos formatos:
 | Internacional | `,` | `.` | — |
 | Argentino/Europeo | `;` | `,` | `.` |
 
-La detección es automática: si el CSV leído con coma tiene una sola columna, se reintenta con punto y coma. Si hay `ParserError`, también se reintenta con `;`. Las conversiones numéricas respetan el flag `decimal_coma` almacenado en `df.attrs`.
+La detección es automática: si el CSV leído con coma produce una sola columna, se reintenta con punto y coma. La distinción entre coma decimal y coma como miles se hace verificando que **todos** los valores con coma tengan exactamente 3 dígitos después (miles), no solo alguno. Esto evita que valores como `1,5` se interpreten incorrectamente como `15`.
+
+---
+
+## Normalización de columnas
+
+- Los nombres de columna se limpian de espacios al inicio y fin (`strip`) en todos los archivos.
+- Los IDs (`ID_PF` / `ID P.F`) se normalizan: `strip()` + eliminación de guiones. Esto aplica a TIV, maestro, históricos y agentes Canal Propio.
+- Los ID duplicados en TIV, Maestro y DSP/KYC se eliminan conservando la primera ocurrencia; se muestra advertencia en el log.
+- Si un archivo tiene columnas con nombres duplicados (ej: `STOCK SUBE` y `STOCK_SUBE` en el mismo archivo), se conserva la primera aparición después del rename.
 
 ---
 
@@ -303,3 +363,42 @@ Verificadas al inicio por `pre_app_check.py`. Si falta alguna, muestra instrucci
 | `ajuste_canal_propio` | 0.82 | Factor de reducción para agentes Canal Propio |
 
 Los parámetros son editables en la UI (Paso 3, pestaña Parámetros) sin necesidad de modificar el código.
+
+---
+
+## Historial de cambios relevantes
+
+### Robustez y validaciones (mayo 2026)
+
+**`cargador.py`**
+- `_leer()`: columnas normalizadas con `str.strip()` en un único punto de retorno. Detección de formato por firma binaria (no solo extensión).
+- `_num()`: corrección en detección de coma como miles — se exige que **todos** los valores con coma tengan exactamente 3 dígitos decimales (antes usaba `.any()`, lo que convertía valores decimales como `1,5` en `15`).
+- `_validar()`: helper centralizado que lanza `ValueError` descriptivo con nombre de archivo y columnas disponibles cuando falta una columna requerida.
+- Todos los `cargar_*`: validación de columnas requeridas mediante `_validar()`. Archivos vacíos (0 filas) lanzan `ValueError` descriptivo.
+- `cargar_tiv`: verifica presencia de al menos una columna de transacciones. Columnas ausentes del TIV se inicializan en 0 (degradación graceful).
+- `cargar_maestro`: eliminación de columnas duplicadas movida **antes** de `_num()` para evitar crash cuando el archivo tiene `STOCK SUBE` y `STOCK_SUBE` simultáneamente.
+- `cargar_tiv`, `cargar_maestro`, `cargar_dsp_kyc`: advertencia en log cuando hay `ID_PF` duplicados.
+
+**`calculos_consumo.py`**
+- Todas las columnas de transacciones (`BP_TU`, `TX_QCASH`, `TXS_SIN_FAC`, `TX_IMT_OB`, `TX_IMT_IB`, `TX_DMT_OB`, `TX_DMT_IB`, `PRISMA_CI`, `PRISMA_CO`) se inicializan en 0 si no vienen en el TIV.
+
+**`logica_reposicion.py`**
+- Validación de columna `ID P.F` en cada archivo histórico con mensaje descriptivo.
+- Normalización de IDs del archivo de agentes Canal Propio (strip + eliminación de guiones) para garantizar coincidencia correcta con los IDs del resultado.
+- `SUBSEGMENTACION = 0` se reemplaza por 1 después de la conversión numérica.
+
+**`paso1_carga.py`**
+- Auto-detección reescrita con matching por substring y pool sin reemplazo. `trx_sube` tiene prioridad sobre `sube`. Keywords ordenados de más específico a más genérico.
+
+**`paso2_consumo.py`**
+- Validación de los 11 archivos requeridos antes de iniciar el cálculo.
+- Backup automático del MaestroStock anterior antes de sobreescribir.
+- Errores de `ValueError`/`KeyError` se muestran como mensaje limpio sin traceback.
+
+**`paso4_resultados.py`**
+- Validación de archivos de consumo histórico y maestro actual antes de iniciar el cálculo.
+- Errores de `ValueError`/`KeyError` se muestran como mensaje limpio.
+
+**Limpieza**
+- Eliminado `loader.py` (duplicado de `cargador.py`, nunca importado).
+- Eliminadas constantes y fuentes sin uso en `config.py`, `estilos.py` y `componentes.py`.
