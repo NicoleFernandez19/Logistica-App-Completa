@@ -143,10 +143,9 @@ def cargar_maestro(path):
         "STOCK_RESMA":               "STOCK_RESMA_ANT",
         "STOCK_RESMA_MES ANTERIOR":  "STOCK_RESMA_ANT",
     })
-    _num(df, ["STOCK_ROLLO_ANT", "STOCK_SUBE_ANT", "STOCK_PRISMA_ANT", "STOCK_RESMA_ANT"])
-    # Si el archivo tenía variantes de la misma columna (ej: "STOCK SUBE" y "STOCK_SUBE"),
-    # el rename produce duplicados; nos quedamos con la primera aparición.
+    # Eliminar duplicados de columna ANTES de _num para evitar que df[col] retorne DataFrame
     df = df.loc[:, ~df.columns.duplicated(keep="first")]
+    _num(df, ["STOCK_ROLLO_ANT", "STOCK_SUBE_ANT", "STOCK_PRISMA_ANT", "STOCK_RESMA_ANT"])
     return df
 
 
