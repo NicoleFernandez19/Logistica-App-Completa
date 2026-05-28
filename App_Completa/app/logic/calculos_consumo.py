@@ -23,6 +23,17 @@ def calcular(tiv, maestro, fac_termicas, prisma_env, sube_env, trx_sube,
     df["_COM"] = df["ID_PF"].isin(ids_com)
     df["_DKY"] = df["ID_PF"].isin(ids_dspkyc)
 
+    _tiene_canal = "CANAL_AGENTE_AGRUP" in df.columns
+    if not _tiene_canal:
+        print(
+            "  ADVERTENCIA: columna 'CANAL_AGENTE_AGRUP' no encontrada en el TIV.\n"
+            "    Los agentes 'Centros y Asistidos' quedarán clasificados como TIPO 0.\n"
+            "    Verifique que el archivo TIV incluya esta columna."
+        )
+    else:
+        n_ca = df["CANAL_AGENTE_AGRUP"].astype(str).str.strip().eq("Centros y Asistidos").sum()
+        print(f"  CANAL_AGENTE_AGRUP detectada — {n_ca} agente(s) 'Centros y Asistidos' en TIV.")
+
     def _tipo(row):
         if row["_COM"] and row["_FAC"] and row["_DKY"]:
             return 5
@@ -30,13 +41,16 @@ def calcular(tiv, maestro, fac_termicas, prisma_env, sube_env, trx_sube,
             return 4
         if row["_FAC"]:
             return 3
-        if str(row.get("CANAL_AGENTE_AGRUP", "")) == "Centros y Asistidos":
+        if _tiene_canal and str(row.get("CANAL_AGENTE_AGRUP", "")).strip() == "Centros y Asistidos":
             return 2
         if row["FLAG_DSP"] == 1:
             return 1
         return 0
 
     df["TIPO_AGENTE"] = df.apply(_tipo, axis=1)
+    conteo_tipos = df["TIPO_AGENTE"].value_counts().sort_index().to_dict()
+    print(f"  Clasificación TIPO_AGENTE: {conteo_tipos}")
+
     df["FLAG_DSP_KYC"] = df["_DKY"].astype(int)
     df.drop(columns=["_FAC", "_COM", "_DKY"], inplace=True)
 

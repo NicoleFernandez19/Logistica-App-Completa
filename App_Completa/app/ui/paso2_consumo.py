@@ -288,13 +288,33 @@ class Paso2Consumo(ctk.CTkFrame):
             resma_env  = cargar_resma_env(paths["resma_env"]) if "resma_env" in paths else None
             fajas      = cargar_fajas(paths["fajas"]) if "fajas" in paths else None
 
+            advertencias = []
+            if "CANAL_AGENTE_AGRUP" not in tiv.columns:
+                advertencias.append(
+                    "La columna 'CANAL_AGENTE_AGRUP' no se encontró en el archivo TIV.\n\n"
+                    "Los agentes 'Centros y Asistidos' quedarán clasificados como TIPO 0, "
+                    "lo que puede afectar el cálculo de RESMAS.\n\n"
+                    "Verifique que el archivo TIV exportado incluya esta columna."
+                )
+
             df_tiv, df_mae = calcular(
                 tiv, maestro, fac, prisma, sube, trx,
                 dsp_kyc, com_tx_int, rollo_env,
                 resma_env=resma_env, fajas=fajas,
             )
+
+            if "CANAL_AGENTE_AGRUP" in tiv.columns:
+                n_tipo2 = int((df_tiv["TIPO_AGENTE"] == 2).sum())
+                if n_tipo2 == 0:
+                    advertencias.append(
+                        "La columna 'CANAL_AGENTE_AGRUP' está presente en el TIV "
+                        "pero ningún agente tiene el valor 'Centros y Asistidos'.\n\n"
+                        "Si existen agentes de ese canal, verifique que el valor "
+                        "en la columna sea exactamente 'Centros y Asistidos'."
+                    )
+
             df_repo = preparar_maestro_exportable(df_tiv, df_mae)
-            self._q.put(("ok", (df_tiv, df_mae, df_repo)))
+            self._q.put(("ok", (df_tiv, df_mae, df_repo, advertencias)))
         except (ValueError, KeyError) as exc:
             self._q.put(("error", str(exc)))
         except Exception as exc:
@@ -317,7 +337,7 @@ class Paso2Consumo(ctk.CTkFrame):
             return
 
         if msg == "ok":
-            df_tiv, df_mae, df_repo = data
+            df_tiv, df_mae, df_repo, advertencias = data
             self._df_tiv     = df_tiv
             self._df_maestro = df_mae
             self._df_repo    = df_repo
@@ -331,6 +351,11 @@ class Paso2Consumo(ctk.CTkFrame):
             self._btn_calc.configure(state="normal",
                                      text="  CALCULAR CONSUMO  ")
             self._auto_guardar()
+            if advertencias:
+                messagebox.showwarning(
+                    "Advertencias del cálculo",
+                    "\n\n---\n\n".join(advertencias),
+                )
         else:
             self._btn_calc.configure(state="normal",
                                      text="  CALCULAR CONSUMO  ")
