@@ -6,7 +6,7 @@ import pandas as pd
 
 def _leer(path):
     # Soporte para "ruta.xlsx::NombreHoja" (libro multi-hoja cargado desde Paso 1)
-    sheet_name = None
+    sheet_name = 0  # default: primera hoja (igual que antes)
     path_str = str(path)
     if "::" in path_str:
         path_str, sheet_name = path_str.rsplit("::", 1)
