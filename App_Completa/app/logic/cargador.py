@@ -47,6 +47,25 @@ def _leer(path):
                 ultimo_error = exc
         if df is None:
             raise ultimo_error
+    # Guardia: pd.read_excel devuelve dict solo con sheet_name=None o lista
+    if isinstance(df, dict):
+        print(f"  DIAGNOSTICO _leer: path={str(path)!r} sheet_name={sheet_name!r}")
+        print(f"  Hojas disponibles: {list(df.keys())}")
+        if isinstance(sheet_name, str) and sheet_name in df:
+            df = df[sheet_name]
+        elif isinstance(sheet_name, str):
+            # Buscar coincidencia case-insensitive
+            match = next((k for k in df if k.strip().lower() == sheet_name.strip().lower()), None)
+            if match:
+                print(f"  Match case-insensitive: '{sheet_name}' → '{match}'")
+                df = df[match]
+            else:
+                raise ValueError(
+                    f"Hoja '{sheet_name}' no encontrada en el archivo.\n"
+                    f"Hojas disponibles: {list(df.keys())}"
+                )
+        else:
+            df = next(iter(df.values()))
     df.columns = df.columns.str.strip().str.upper()
     return df
 
