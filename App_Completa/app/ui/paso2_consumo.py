@@ -244,6 +244,33 @@ class Paso2Consumo(ctk.CTkFrame):
         self._lbl_status.configure(text="")
         self._mostrar_zona("pre")
 
+    def _mostrar_advertencias(self, advertencias):
+        texto = "\n\n---\n\n".join(advertencias)
+        win = tk.Toplevel(self)
+        win.title("Advertencias del cálculo")
+        win.geometry("560x320")
+        win.resizable(True, True)
+        win.grab_set()
+
+        txt = tk.Text(win, wrap="word", font=("Segoe UI", 10),
+                      relief="flat", padx=10, pady=10)
+        txt.pack(fill="both", expand=True)
+        txt.insert("1.0", texto)
+        txt.bind("<Key>", lambda e: "break")          # evita edición
+        txt.bind("<Control-a>", lambda e: (
+            txt.tag_add("sel", "1.0", "end"), "break"))
+
+        bar = tk.Frame(win)
+        bar.pack(fill="x", padx=10, pady=8)
+
+        def _copiar():
+            win.clipboard_clear()
+            win.clipboard_append(txt.get("1.0", "end").strip())
+
+        tk.Button(bar, text="Copiar", command=_copiar, width=10).pack(side="right")
+        tk.Button(bar, text="Cerrar", command=win.destroy, width=10).pack(
+            side="right", padx=6)
+
     def _ejecutar(self):
         self._btn_calc.configure(state="disabled", text="  Calculando...  ")
         self._lbl_status.configure(text="Leyendo archivos...", text_color=GRIS_TEXTO)
@@ -360,10 +387,7 @@ class Paso2Consumo(ctk.CTkFrame):
                                      text="  CALCULAR CONSUMO  ")
             self._auto_guardar()
             if advertencias:
-                messagebox.showwarning(
-                    "Advertencias del cálculo",
-                    "\n\n---\n\n".join(advertencias),
-                )
+                self._mostrar_advertencias(advertencias)
         else:
             self._btn_calc.configure(state="normal",
                                      text="  CALCULAR CONSUMO  ")

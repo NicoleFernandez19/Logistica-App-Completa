@@ -123,10 +123,20 @@ class Paso4Resultados(ctk.CTkFrame):
         right.rowconfigure(1, weight=1)
         right.columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(right, text="Log del proceso",
+        hdr_log = ctk.CTkFrame(right, fg_color="transparent")
+        hdr_log.grid(row=0, column=0, sticky="ew", padx=6, pady=4)
+
+        ctk.CTkLabel(hdr_log, text="Log del proceso",
                      font=("Segoe UI", 11, "bold"),
-                     text_color=NEGRO).grid(row=0, column=0,
-                                             sticky="w", padx=10, pady=6)
+                     text_color=NEGRO).pack(side="left", padx=4)
+
+        ctk.CTkButton(
+            hdr_log, text="Copiar",
+            fg_color=GRIS_BG, hover_color="#E2E8F0",
+            text_color=NEGRO, font=("Segoe UI", 10),
+            width=60, height=24, corner_radius=4,
+            command=self._copiar_log,
+        ).pack(side="right", padx=4)
 
         self._log = ctk.CTkTextbox(right, font=("Consolas", 11),
                                     fg_color=GRIS_BG, corner_radius=0,
@@ -158,6 +168,12 @@ class Paso4Resultados(ctk.CTkFrame):
 
     def on_mostrar(self):
         pass
+
+    def _copiar_log(self):
+        texto = self._log.get("1.0", "end").strip()
+        if texto:
+            self.clipboard_clear()
+            self.clipboard_append(texto)
 
     def _log_write(self, texto):
         self._log.configure(state="normal")
