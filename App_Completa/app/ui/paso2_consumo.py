@@ -306,11 +306,19 @@ class Paso2Consumo(ctk.CTkFrame):
             if "CANAL_AGENTE_AGRUP" in tiv.columns:
                 n_tipo2 = int((df_tiv["TIPO_AGENTE"] == 2).sum())
                 if n_tipo2 == 0:
+                    valores = (
+                        tiv["CANAL_AGENTE_AGRUP"]
+                        .dropna()
+                        .astype(str)
+                        .str.strip()
+                        .unique()
+                        .tolist()
+                    )
                     advertencias.append(
                         "La columna 'CANAL_AGENTE_AGRUP' está presente en el TIV "
-                        "pero ningún agente tiene el valor 'Centros y Asistidos'.\n\n"
-                        "Si existen agentes de ese canal, verifique que el valor "
-                        "en la columna sea exactamente 'Centros y Asistidos'."
+                        "pero ningún agente quedó clasificado como TIPO 2 (Centros y Asistidos).\n\n"
+                        f"Valores encontrados en la columna: {valores}\n\n"
+                        "Verifique que alguno de esos valores sea 'Centros y Asistidos'."
                     )
 
             df_repo = preparar_maestro_exportable(df_tiv, df_mae)

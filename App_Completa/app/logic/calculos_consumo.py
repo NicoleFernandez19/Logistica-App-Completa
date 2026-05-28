@@ -31,8 +31,11 @@ def calcular(tiv, maestro, fac_termicas, prisma_env, sube_env, trx_sube,
             "    Verifique que el archivo TIV incluya esta columna."
         )
     else:
-        n_ca = df["CANAL_AGENTE_AGRUP"].astype(str).str.strip().eq("Centros y Asistidos").sum()
-        print(f"  CANAL_AGENTE_AGRUP detectada — {n_ca} agente(s) 'Centros y Asistidos' en TIV.")
+        valores_canal = df["CANAL_AGENTE_AGRUP"].astype(str).str.strip().unique()
+        print(f"  CANAL_AGENTE_AGRUP detectada — valores únicos: {list(valores_canal)}")
+        n_ca = sum(v.lower() == "centros y asistidos" for v in valores_canal
+                   if v not in ("nan", ""))
+        print(f"    → {n_ca} valor(es) coinciden con 'Centros y Asistidos' (sin distinguir mayúsculas)")
 
     def _tipo(row):
         if row["_COM"] and row["_FAC"] and row["_DKY"]:
@@ -41,7 +44,7 @@ def calcular(tiv, maestro, fac_termicas, prisma_env, sube_env, trx_sube,
             return 4
         if row["_FAC"]:
             return 3
-        if _tiene_canal and str(row.get("CANAL_AGENTE_AGRUP", "")).strip() == "Centros y Asistidos":
+        if _tiene_canal and str(row.get("CANAL_AGENTE_AGRUP", "")).strip().lower() == "centros y asistidos":
             return 2
         if row["FLAG_DSP"] == 1:
             return 1
