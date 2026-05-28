@@ -252,6 +252,8 @@ class VentanaPrincipal(ctk.CTk):
         self._df_tiv = df_tiv
         self._df_maestro = df_maestro
         self._df_maestro_repo = df_maestro_repo
+        # Mover el libro XLSX a Data_old ahora que el cálculo fue exitoso
+        self._p1.archivar_libro()
         if self._paso_actual == 1:
             self._actualizar_nav()
 

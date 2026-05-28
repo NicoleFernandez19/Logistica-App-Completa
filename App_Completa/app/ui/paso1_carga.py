@@ -259,33 +259,38 @@ class Paso1Carga(ctk.CTkFrame):
                 row=r, column=0, columnspan=3, padx=8, pady=(4, 2), sticky="w")
 
     def _libro_aplicar(self):
-        self._libro_mover_y_aplicar(self._libro_path, self._libro_mapeo)
+        self._libro_asignar(self._libro_path, self._libro_mapeo)
 
-    def _libro_mover_y_aplicar(self, source_path, mapeo):
-        """Asigna las hojas a los slots y mueve el archivo fuente a Data_old/."""
+    def _libro_asignar(self, source_path, mapeo):
+        """Asigna las hojas a los slots. El archivo se mueve a Data_old recién después del cálculo."""
+        self._libro_pendiente_archivar = source_path  # guardado para mover después
         p = Path(source_path)
+        for key, hoja in mapeo.items():
+            ref = f"{source_path}::{hoja}"
+            self._set_path(key, ref, f"{p.name} [{hoja}]", auto=True)
+        self._actualizar_counter()
+
+    def archivar_libro(self):
+        """Mueve el libro a Data_old/ después de que el cálculo fue exitoso."""
+        path = getattr(self, "_libro_pendiente_archivar", None)
+        if not path:
+            return
+        p = Path(path)
+        if not p.exists():
+            self._libro_pendiente_archivar = None
+            return
         base = Path(sys.argv[0]).resolve().parent
         data_old = base / "Data_old"
         data_old.mkdir(exist_ok=True)
-
         destino = data_old / p.name
         if destino.exists():
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             destino = data_old / f"{p.stem}_{ts}{p.suffix}"
-
-        nueva_ruta = source_path
         try:
             p.rename(destino)
-            nueva_ruta = str(destino)
         except Exception as exc:
             print(f"  ADVERTENCIA: No se pudo mover {p.name} a Data_old: {exc}")
-
-        nueva_p = Path(nueva_ruta)
-        for key, hoja in mapeo.items():
-            ref = f"{nueva_ruta}::{hoja}"
-            self._set_path(key, ref, f"{nueva_p.name} [{hoja}]", auto=True)
-
-        self._actualizar_counter()
+        self._libro_pendiente_archivar = None
 
     # ── Tab: Carga múltiple de archivos ───────────────────────────────────────
 
@@ -294,43 +299,48 @@ class Paso1Carga(ctk.CTkFrame):
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent",
                                         corner_radius=0, height=200)
         scroll.pack(fill="both", expand=True, pady=(4, 0))
-        scroll.columnconfigure(0, minsize=24)   # icono ✓/–
-        scroll.columnconfigure(1, minsize=160)  # nombre del slot
+        scroll.columnconfigure(0, minsize=28)   # icono ✓/–
+        scroll.columnconfigure(1, minsize=185)  # nombre del slot
         scroll.columnconfigure(2, weight=1)     # archivo seleccionado
-        scroll.columnconfigure(3, minsize=36)   # botón ...
+        scroll.columnconfigure(3, minsize=40)   # botón ...
 
         self._mult_iconos = {}
         self._mult_vars   = {}
         self._mult_lbls   = {}
 
         for i, (key, label, _) in enumerate(_ARCHIVOS):
+            # Fondo alternado compatible con dark/light
+            bg = GRIS_BG if i % 2 == 0 else APPLE_FILL
+
             icono = ctk.CTkLabel(scroll, text="–",
+                                 fg_color=bg,
                                  font=("Segoe UI", 11, "bold"),
-                                 text_color=GRIS_TEXTO, width=24)
-            icono.grid(row=i, column=0, sticky="w", padx=(4, 2), pady=3)
+                                 text_color=GRIS_TEXTO, width=28)
+            icono.grid(row=i, column=0, sticky="nsew", padx=(4, 0), pady=1)
             self._mult_iconos[key] = icono
 
             ctk.CTkLabel(scroll, text=label,
+                         fg_color=bg,
                          font=("Segoe UI", 11, "bold"),
                          text_color=NEGRO, anchor="w").grid(
-                row=i, column=1, sticky="w", padx=(0, 8), pady=3)
+                row=i, column=1, sticky="nsew", padx=(4, 8), pady=1)
 
             var = tk.StringVar(value="Sin archivo")
             self._mult_vars[key] = var
 
             lbl = ctk.CTkLabel(scroll, textvariable=var,
-                               fg_color=APPLE_FILL, corner_radius=6,
+                               fg_color=bg, corner_radius=0,
                                font=("Segoe UI", 10), text_color=GRIS_TEXTO,
                                anchor="w", height=30)
-            lbl.grid(row=i, column=2, sticky="ew", padx=(0, 6), pady=3)
+            lbl.grid(row=i, column=2, sticky="nsew", padx=(0, 4), pady=1)
             self._mult_lbls[key] = lbl
 
-            ctk.CTkButton(scroll, text="...", width=34, height=30,
+            ctk.CTkButton(scroll, text="...", width=36, height=28,
                           fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
                           text_color=NEGRO, border_width=1, border_color=GRIS_BORDE,
                           corner_radius=6,
                           command=lambda k=key: self._mult_examinar(k)).grid(
-                row=i, column=3, pady=3)
+                row=i, column=3, pady=1, padx=(0, 4))
 
     def _mult_examinar(self, key):
         base = Path(sys.argv[0]).resolve().parent
@@ -474,7 +484,7 @@ class Paso1Carga(ctk.CTkFrame):
         self._libro_actualizar_preview(hojas)
         self._btn_libro_aplicar.configure(state="normal")
 
-        self._libro_mover_y_aplicar(str(p), mapeo)
+        self._libro_asignar(str(p), mapeo)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
