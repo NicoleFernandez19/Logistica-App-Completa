@@ -296,9 +296,13 @@ class Paso2Consumo(ctk.CTkFrame):
                     + "\n".join(f"  • {lbl}" for lbl in faltantes)
                 )
 
+            def _ruta_archivo(p):
+                """Extrae la ruta del archivo descartando ::NombreHoja si lo tiene."""
+                return p.rsplit("::", 1)[0] if "::" in p else p
+
             no_existen = [
                 (lbl, paths[k]) for k, lbl in _obligatorios.items()
-                if k in paths and not Path(paths[k]).exists()
+                if k in paths and not Path(_ruta_archivo(paths[k])).exists()
             ]
             if no_existen:
                 detalle = "\n".join(
