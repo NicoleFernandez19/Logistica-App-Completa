@@ -5,18 +5,25 @@ import pandas as pd
 
 
 def _leer(path):
+    # Soporte para "ruta.xlsx::NombreHoja" (libro multi-hoja cargado desde Paso 1)
+    sheet_name = None
+    path_str = str(path)
+    if "::" in path_str:
+        path_str, sheet_name = path_str.rsplit("::", 1)
+        path = Path(path_str)
+
     with open(path, "rb") as fh:
         firma = fh.read(4)
     ext = str(path).rsplit(".", 1)[-1].lower() if "." in str(path) else ""
     es_zip = firma == b"PK\x03\x04"
     es_ole = firma[:4] == b"\xD0\xCF\x11\xE0"
     if ext == "xlsx" or es_zip:
-        df = pd.read_excel(path, dtype=str, engine="openpyxl")
+        df = pd.read_excel(path, dtype=str, engine="openpyxl", sheet_name=sheet_name)
     elif ext == "xls" or es_ole:
         try:
-            df = pd.read_excel(path, dtype=str, engine="xlrd")
+            df = pd.read_excel(path, dtype=str, engine="xlrd", sheet_name=sheet_name)
         except Exception:
-            df = pd.read_excel(path, dtype=str, engine="openpyxl")
+            df = pd.read_excel(path, dtype=str, engine="openpyxl", sheet_name=sheet_name)
     else:
         ultimo_error = None
         df = None
