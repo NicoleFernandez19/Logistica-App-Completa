@@ -1,8 +1,12 @@
 import customtkinter as ctk
-from .estilos import configurar_tema, NEGRO, AMARILLO, AMARILLO_DARK, BLANCO, GRIS_BG
-from .componentes import IndicadorPasos
+from .estilos import (configurar_tema, set_modo_apariencia,
+                      NEGRO, AMARILLO, AMARILLO_DARK,
+                      BLANCO, GRIS_BG, GRIS_BORDE, GRIS_TEXTO,
+                      APPLE_BAR, APPLE_HOVER, APPLE_FILL, APPLE_SELECTED,
+                      WU_BLACK, WU_YELLOW)
+from .componentes import IndicadorPasos, TablaWidget
 
-_PASOS = ["Archivos\nConsumo", "Consumo", "Archivos\nReposición", "Pedidos"]
+_PASOS = ["Archivos", "Consumo", "Reposicion", "Pedidos"]
 _N_CONSUMO     = 11  # archivos requeridos en paso 1
 _N_REPOSICION  = 5   # maestro actual + 3 historicos + agentes
 
@@ -12,10 +16,10 @@ class VentanaPrincipal(ctk.CTk):
         configurar_tema()
         super().__init__()
 
-        self.title("Western Union  —  Reposición de Insumos  Argentina")
+        self.title("Western Union - Reposicion de Insumos")
         self.geometry("1420x880")
         self.minsize(1180, 760)
-        self.configure(fg_color=NEGRO)
+        self.configure(fg_color=GRIS_BG)
         self.state("zoomed")
 
         # ── Estado compartido entre pasos ────────────────────────────────────
@@ -24,6 +28,7 @@ class VentanaPrincipal(ctk.CTk):
         self._df_maestro_repo = None  # preparar_maestro_exportable()
 
         self._paso_actual = 0
+        self._modo_var = ctk.StringVar(value="Dia")
 
         self._build()
         self._ir_paso(0)
@@ -67,47 +72,81 @@ class VentanaPrincipal(ctk.CTk):
     # ── Header ───────────────────────────────────────────────────────────────
 
     def _build_header(self):
-        h = ctk.CTkFrame(self, fg_color=NEGRO, height=66, corner_radius=0)
+        h = ctk.CTkFrame(self, fg_color=APPLE_BAR, height=78, corner_radius=0)
         h.pack(fill="x")
         h.pack_propagate(False)
 
-        # Línea amarilla inferior
-        ctk.CTkFrame(h, fg_color=AMARILLO, height=3, corner_radius=0).pack(
+        # Separador inferior
+        ctk.CTkFrame(h, fg_color=GRIS_BORDE, height=1, corner_radius=0).pack(
             side="bottom", fill="x")
 
-        ctk.CTkLabel(h, text="WESTERN UNION",
-                     font=("Segoe UI", 20, "bold"),
-                     text_color=AMARILLO).pack(side="left", padx=20, pady=8)
-        ctk.CTkLabel(h, text="Reposición de Insumos  ·  Argentina",
-                     font=("Segoe UI", 12),
-                     text_color="#CCCCCC").pack(side="left", padx=4)
+        brand = ctk.CTkFrame(h, fg_color="transparent")
+        brand.pack(side="left", padx=22, pady=11)
+
+        logo = ctk.CTkFrame(brand, fg_color=WU_BLACK, width=172, height=48,
+                            corner_radius=10, border_width=1,
+                            border_color=GRIS_BORDE)
+        logo.pack(side="left")
+        logo.pack_propagate(False)
+
+        ctk.CTkLabel(
+            logo, text="WESTERN UNION",
+            font=("Segoe UI", 16, "bold"),
+            text_color=WU_YELLOW,
+        ).pack(expand=True)
+
+        brand_text = ctk.CTkFrame(brand, fg_color="transparent")
+        brand_text.pack(side="left", padx=14)
+        ctk.CTkLabel(brand_text, text="Reposicion de Insumos",
+                     font=("Segoe UI", 15, "bold"),
+                     text_color=NEGRO).pack(anchor="w")
+        ctk.CTkLabel(brand_text, text="Argentina",
+                     font=("Segoe UI", 11),
+                     text_color=GRIS_TEXTO).pack(anchor="w", pady=(2, 0))
+
+        self._modo_selector = ctk.CTkSegmentedButton(
+            h,
+            values=["Dia", "Noche"],
+            variable=self._modo_var,
+            command=self._cambiar_modo,
+            fg_color=APPLE_FILL,
+            selected_color=APPLE_SELECTED,
+            selected_hover_color=APPLE_SELECTED,
+            unselected_color=APPLE_FILL,
+            unselected_hover_color=APPLE_HOVER,
+            text_color=NEGRO,
+            width=156,
+            height=36,
+            corner_radius=18,
+            font=("Segoe UI", 11),
+        )
+        self._modo_selector.pack(side="right", padx=22, pady=16)
 
     # ── Indicador de pasos ────────────────────────────────────────────────────
 
     def _build_indicador(self):
-        bar = ctk.CTkFrame(self, fg_color=NEGRO, height=86, corner_radius=0)
+        bar = ctk.CTkFrame(self, fg_color=APPLE_BAR, height=88, corner_radius=0)
         bar.pack(fill="x")
         bar.pack_propagate(False)
-        ctk.CTkFrame(bar, fg_color="#333333", height=1,
-                     corner_radius=0).pack(side="bottom", fill="x")
+        ctk.CTkFrame(bar, fg_color=GRIS_BORDE, height=1, corner_radius=0).pack(
+            side="bottom", fill="x")
 
-        self._indicador = IndicadorPasos(bar, _PASOS, fg_color="transparent")
-        self._indicador.place(relx=0.5, rely=0.5, anchor="center")
+        self._indicador = IndicadorPasos(bar, _PASOS)
+        self._indicador.place(relx=0.5, rely=0.48, anchor="center")
 
     # ── Footer con navegación ─────────────────────────────────────────────────
 
     def _build_footer(self):
-        foot = ctk.CTkFrame(self, fg_color=NEGRO, height=76, corner_radius=0)
+        foot = ctk.CTkFrame(self, fg_color=GRIS_BG, height=70, corner_radius=0)
         foot.pack(fill="x", side="bottom")
         foot.pack_propagate(False)
-        ctk.CTkFrame(foot, fg_color="#333333", height=1,
-                     corner_radius=0).pack(side="top", fill="x")
 
         self._btn_ant = ctk.CTkButton(
             foot, text="← Anterior",
-            fg_color="#2D2D2D", hover_color="#404040",
-            text_color=BLANCO, font=("Segoe UI", 12),
-            width=150, height=46, corner_radius=6,
+            fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
+            text_color=NEGRO, font=("Segoe UI", 12),
+            border_width=1, border_color=GRIS_BORDE,
+            width=150, height=42, corner_radius=21,
             command=self._anterior,
         )
         self._btn_ant.pack(side="left", padx=20, pady=12)
@@ -115,8 +154,8 @@ class VentanaPrincipal(ctk.CTk):
         self._btn_sig = ctk.CTkButton(
             foot, text="Siguiente →",
             fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-            text_color=NEGRO, font=("Segoe UI", 12, "bold"),
-            width=180, height=46, corner_radius=6,
+            text_color="#FFFFFF", font=("Segoe UI", 12, "bold"),
+            width=180, height=42, corner_radius=21,
             command=self._siguiente,
         )
         self._btn_sig.pack(side="right", padx=20, pady=12)
@@ -151,10 +190,10 @@ class VentanaPrincipal(ctk.CTk):
         # Botón Anterior
         if n == 0:
             self._btn_ant.configure(state="disabled",
-                                    fg_color="#1A1A1A", text_color="#555555")
+                                    fg_color=APPLE_FILL, text_color=GRIS_BORDE)
         else:
             self._btn_ant.configure(state="normal",
-                                    fg_color="#2D2D2D", text_color=BLANCO)
+                                    fg_color=APPLE_FILL, text_color=NEGRO)
 
         # Botón Siguiente
         if n == 0:
@@ -162,43 +201,48 @@ class VentanaPrincipal(ctk.CTk):
             if loaded == _N_CONSUMO:
                 self._btn_sig.configure(
                     state="normal", fg_color=AMARILLO,
-                    text_color=NEGRO, text="Siguiente →")
+                    text_color="#FFFFFF", text="Siguiente →")
             else:
                 self._btn_sig.configure(
-                    state="disabled", fg_color="#333333",
-                    text_color="#666666",
+                    state="disabled", fg_color=APPLE_FILL,
+                    text_color=GRIS_TEXTO,
                     text=f"Cargar archivos  ({loaded}/{_N_CONSUMO})")
 
         elif n == 1:
             if self._df_maestro_repo is not None:
                 self._btn_sig.configure(
                     state="normal", fg_color=AMARILLO,
-                    text_color=NEGRO, text="Ir a Reposición →")
+                    text_color="#FFFFFF", text="Ir a Reposición →")
             else:
                 self._btn_sig.configure(
-                    state="disabled", fg_color="#333333",
-                    text_color="#666666", text="Calcular consumo primero")
+                    state="disabled", fg_color=APPLE_FILL,
+                    text_color=GRIS_TEXTO, text="Calcular consumo primero")
 
         elif n == 2:
             loaded = len(self._p3.get_paths())
             if loaded == _N_REPOSICION:
                 self._btn_sig.configure(
                     state="normal", fg_color=AMARILLO,
-                    text_color=NEGRO, text="Calcular Pedidos →")
+                    text_color="#FFFFFF", text="Calcular Pedidos →")
             else:
                 self._btn_sig.configure(
-                    state="disabled", fg_color="#333333",
-                    text_color="#666666",
+                    state="disabled", fg_color=APPLE_FILL,
+                    text_color=GRIS_TEXTO,
                     text=f"Cargar archivos  ({loaded}/{_N_REPOSICION})")
 
         else:
             self._btn_sig.configure(
-                state="disabled", fg_color="#333333",
-                text_color="#666666", text="Finalizado")
+                state="disabled", fg_color=APPLE_FILL,
+                text_color=GRIS_TEXTO, text="Finalizado")
 
     # ════════════════════════════════════════════════════════════════════════
     # Callbacks entre pasos
     # ════════════════════════════════════════════════════════════════════════
+
+    def _cambiar_modo(self, valor):
+        set_modo_apariencia("dark" if valor == "Noche" else "light")
+        TablaWidget.refrescar_todas()
+        self._actualizar_nav()
 
     def _on_archivos_consumo_change(self, n_loaded):
         if self._paso_actual == 0:
@@ -214,3 +258,4 @@ class VentanaPrincipal(ctk.CTk):
     def _on_archivos_repo_change(self, n_loaded):
         if self._paso_actual == 2:
             self._actualizar_nav()
+

@@ -3,13 +3,14 @@ import sys
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 
 import customtkinter as ctk
 
-from .componentes import TablaWidget
+from .componentes import TablaWidget, mostrar_dialogo, confirmar
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
-                      GRIS_TEXTO, GRIS_BORDE, VERDE, INFO_BG, INFO_BORDE)
+                      GRIS_TEXTO, GRIS_BORDE, VERDE, INFO_BG, INFO_BORDE,
+                      APPLE_FILL, APPLE_HOVER, APPLE_SELECTED)
 from ..config import PARAMETROS, PRODUCTOS
 from ..logic.cargador import cargar_consumo_mes
 
@@ -31,7 +32,7 @@ _MESES = {
     "noviembre": 11, "diciembre": 12,
 }
 
-_PRODUCT_COLS = ["Base", "Repo", "Metodo", "SKU", "Descripcion"]
+_PRODUCT_COLS = ["Base", "Repo", "Método", "SKU", "Descripción"]
 
 
 class Paso3Reposicion(ctk.CTkFrame):
@@ -79,8 +80,8 @@ class Paso3Reposicion(ctk.CTkFrame):
             self,
             fg_color=BLANCO,
             segmented_button_fg_color=GRIS_BG,
-            segmented_button_selected_color=AMARILLO,
-            segmented_button_selected_hover_color=AMARILLO_DARK,
+            segmented_button_selected_color=APPLE_SELECTED,
+            segmented_button_selected_hover_color=APPLE_SELECTED,
             segmented_button_unselected_color=GRIS_BG,
             text_color=NEGRO,
             anchor="nw",
@@ -126,7 +127,7 @@ class Paso3Reposicion(ctk.CTkFrame):
         ctk.CTkButton(
             nav, text="Productos  →",
             fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-            text_color=NEGRO, font=("Segoe UI", 11, "bold"),
+            text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
             width=150, height=34, corner_radius=6,
             command=lambda: self._tabs.set("  Productos  "),
         ).pack(padx=4)
@@ -153,7 +154,7 @@ class Paso3Reposicion(ctk.CTkFrame):
         nav.grid(row=2, column=0, sticky="ew", pady=(6, 0))
         ctk.CTkButton(
             nav, text="←  Archivos",
-            fg_color=GRIS_BG, hover_color="#E2E8F0",
+            fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
             text_color=NEGRO, font=("Segoe UI", 11),
             width=140, height=34, corner_radius=6,
             command=lambda: self._tabs.set("  Archivos  "),
@@ -161,7 +162,7 @@ class Paso3Reposicion(ctk.CTkFrame):
         ctk.CTkButton(
             nav, text="Parametros  →",
             fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-            text_color=NEGRO, font=("Segoe UI", 11, "bold"),
+            text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
             width=150, height=34, corner_radius=6,
             command=lambda: self._tabs.set("  Parametros  "),
         ).pack(side="right", padx=4)
@@ -189,7 +190,7 @@ class Paso3Reposicion(ctk.CTkFrame):
         nav.grid(row=2, column=0, sticky="w", pady=(6, 0))
         ctk.CTkButton(
             nav, text="←  Productos",
-            fg_color=GRIS_BG, hover_color="#E2E8F0",
+            fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
             text_color=NEGRO, font=("Segoe UI", 11),
             width=140, height=34, corner_radius=6,
             command=lambda: self._tabs.set("  Productos  "),
@@ -206,36 +207,43 @@ class Paso3Reposicion(ctk.CTkFrame):
         return box
 
     def _build_toolbar(self, parent, row):
-        bar = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=10,
+        bar = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=8,
                            border_width=1, border_color=GRIS_BORDE)
         bar.grid(row=row, column=0, sticky="ew", padx=8, pady=(8, 6))
-        bar.columnconfigure(2, weight=1)
+        bar.columnconfigure(4, weight=1)
 
         ctk.CTkLabel(bar, text="Archivos de reposicion",
                      font=("Segoe UI", 12, "bold"),
                      text_color=NEGRO).grid(row=0, column=0, padx=(14, 8), pady=10)
-        ctk.CTkButton(bar, text="Auto-detectar",
-                      fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-                      text_color=NEGRO, font=("Segoe UI", 11, "bold"),
-                      width=150, height=38, corner_radius=6,
-                      command=self._autodetectar).grid(row=0, column=1, padx=4, pady=10)
         self._lbl_detect = ctk.CTkLabel(
             bar, text="archivos: pendiente",
             font=("Segoe UI", 11), text_color=GRIS_TEXTO)
-        self._lbl_detect.grid(row=0, column=2, sticky="w", padx=(8, 12), pady=10)
+        self._lbl_detect.grid(row=0, column=1, sticky="w", padx=(0, 12), pady=10)
+        ctk.CTkButton(bar, text="Examinar",
+                      fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
+                      text_color=NEGRO, font=("Segoe UI", 12),
+                      border_width=1, border_color=GRIS_BORDE,
+                      width=120, height=40, corner_radius=6,
+                      command=self._examinar_archivos).grid(row=0, column=2, padx=4, pady=10)
+        ctk.CTkButton(bar, text="⟳  Auto-detectar",
+                      fg_color=AMARILLO, hover_color=AMARILLO_DARK,
+                      text_color="#FFFFFF", font=("Segoe UI", 12, "bold"),
+                      width=170, height=40, corner_radius=6,
+                      command=self._autodetectar).grid(row=0, column=3, padx=4, pady=10)
         return row + 1
 
     def _fila_archivo(self, parent, key, label, desc, row):
-        cell = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=10,
+        cell = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=8,
                             border_width=1, border_color=GRIS_BORDE)
         cell.grid(row=row, column=0, sticky="ew", padx=8, pady=4)
 
         top = ctk.CTkFrame(cell, fg_color="transparent")
         top.pack(fill="x", padx=14, pady=(12, 4))
         ctk.CTkLabel(top, text=label, font=("Segoe UI", 12, "bold"),
-                     text_color=NEGRO).pack(side="left")
-        ctk.CTkLabel(top, text=f"  {desc}", font=("Segoe UI", 10),
-                     text_color=GRIS_TEXTO).pack(side="left")
+                     text_color=NEGRO).pack(anchor="w")
+        ctk.CTkLabel(top, text=desc, font=("Segoe UI", 10),
+                     text_color=GRIS_TEXTO, wraplength=520,
+                     justify="left").pack(anchor="w", pady=(2, 0))
 
         inp = ctk.CTkFrame(cell, fg_color="transparent")
         inp.pack(fill="x", padx=14, pady=(0, 12))
@@ -243,22 +251,23 @@ class Paso3Reposicion(ctk.CTkFrame):
         var = tk.StringVar(value="Sin archivo")
         self._vars[key] = var
         lbl = ctk.CTkLabel(inp, textvariable=var,
-                            fg_color=GRIS_BG, corner_radius=6,
+                            fg_color=APPLE_FILL, corner_radius=6,
                             font=("Segoe UI", 11), text_color=GRIS_TEXTO,
                             anchor="w", height=38)
         lbl.pack(side="left", fill="x", expand=True)
         self._lbls[key] = lbl
 
-        ctk.CTkButton(inp, text="Examinar",
-                      fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-                      text_color=NEGRO, font=("Segoe UI", 11),
-                      width=110, height=38, corner_radius=6,
-                      command=lambda k=key: self._browse(k)
-                      ).pack(side="right", padx=(8, 0))
+        btn = ctk.CTkButton(inp, text="...", width=36, height=38,
+                            fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
+                            text_color=NEGRO, border_width=1, border_color=GRIS_BORDE,
+                            corner_radius=6,
+                            command=lambda k=key: self._examinar_individual(k))
+        btn.pack(side="right", padx=(8, 0))
+
         return row + 1
 
     def _build_params(self, parent, row):
-        grid = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=10,
+        grid = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=8,
                             border_width=1, border_color=GRIS_BORDE)
         grid.grid(row=row, column=0, sticky="ew", padx=8, pady=8)
 
@@ -288,7 +297,7 @@ class Paso3Reposicion(ctk.CTkFrame):
                          font=("Segoe UI", 12)).pack(anchor="w", pady=(6, 0))
 
     def _build_productos(self, parent):
-        tools = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=10,
+        tools = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=8,
                              border_width=1, border_color=GRIS_BORDE)
         tools.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 6))
         tools.columnconfigure(1, weight=1)
@@ -303,29 +312,29 @@ class Paso3Reposicion(ctk.CTkFrame):
 
         ctk.CTkButton(tools, text="Anadir",
                       fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-                      text_color=NEGRO, font=("Segoe UI", 11),
+                      text_color="#FFFFFF", font=("Segoe UI", 11),
                       width=100, height=36,
                       command=self._add_producto).grid(row=0, column=2, padx=4, pady=10)
         ctk.CTkButton(tools, text="Editar",
-                      fg_color=GRIS_BG, hover_color=GRIS_BORDE,
+                      fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
                       text_color=NEGRO, font=("Segoe UI", 11),
                       width=100, height=36,
                       command=self._edit_producto).grid(row=0, column=3, padx=4, pady=10)
         ctk.CTkButton(tools, text="Eliminar",
-                      fg_color=GRIS_BG, hover_color=GRIS_BORDE,
+                      fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
                       text_color=NEGRO, font=("Segoe UI", 11),
                       width=100, height=36,
                       command=self._remove_producto).grid(row=0, column=4, padx=4, pady=10)
         ctk.CTkButton(tools, text="Restaurar",
-                      fg_color=GRIS_BG, hover_color=GRIS_BORDE,
+                      fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
                       text_color=NEGRO, font=("Segoe UI", 11),
                       width=112, height=36,
                       command=self._reset_productos).grid(row=0, column=5, padx=(4, 12), pady=10)
 
         self._tbl_productos = TablaWidget(
             parent, _PRODUCT_COLS,
-            anchos={"Base": 150, "Repo": 180, "Metodo": 150,
-                    "SKU": 110, "Descripcion": 360},
+            anchos={"Base": 150, "Repo": 180, "Método": 150,
+                    "SKU": 110, "Descripción": 360},
             fg_color=GRIS_BG,
         )
         self._tbl_productos.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
@@ -486,20 +495,62 @@ class Paso3Reposicion(ctk.CTkFrame):
         self._actualizar_estado_maestro()
         self._actualizar_status()
 
-    def _browse(self, key):
+    def _examinar_archivos(self):
         base = Path(sys.argv[0]).resolve().parent
-        if key == "agentes":
-            idir = base / "Data"
-        else:
-            idir = base / "Maestro_Consumo"
+        idir = base / "Data"
         idir.mkdir(exist_ok=True)
-        path = filedialog.askopenfilename(
-            title=f"Seleccionar {key}",
+        paths = filedialog.askopenfilenames(
+            title="Seleccionar archivos de reposicion",
             filetypes=[("CSV / Excel", "*.csv *.xlsx *.xls"), ("Todos", "*.*")],
             initialdir=str(idir),
         )
-        if path:
-            self._set_path(key, path, auto=False)
+        if not paths:
+            return
+
+        archivos = [Path(p) for p in paths]
+        agentes = [p for p in archivos if "agente" in p.stem.lower()]
+        candidatos = [p for p in archivos if p not in agentes]
+
+        if agentes:
+            self._set_path("agentes", str(sorted(agentes, key=lambda p: p.name.lower())[0]), auto=False)
+
+        ordenados = sorted(
+            candidatos,
+            key=lambda p: (self._fecha_archivo(p), p.name.lower()),
+        )
+        if ordenados:
+            # Si hay 4 o más archivos, el más reciente suele ser el maestro actual.
+            historial = ordenados
+            if len(ordenados) >= 4:
+                actual = ordenados[-1]
+                self._set_path("maestro_actual", str(actual), auto=False)
+                historial = ordenados[:-1]
+            elif any("maestro" in p.stem.lower() and "stock" in p.stem.lower() for p in ordenados):
+                actual = next(
+                    p for p in reversed(ordenados)
+                    if "maestro" in p.stem.lower() and "stock" in p.stem.lower()
+                )
+                self._set_path("maestro_actual", str(actual), auto=False)
+                historial = [p for p in ordenados if p != actual]
+
+            for key, p in zip(("consumo_mes_1", "consumo_mes_2", "consumo_mes_3"), historial[-3:]):
+                self._set_path(key, str(p), auto=False)
+
+        self._actualizar_estado_maestro()
+        self._actualizar_status()
+
+    def _examinar_individual(self, key):
+        base = Path(sys.argv[0]).resolve().parent
+        idir = base / "Data"
+        idir.mkdir(exist_ok=True)
+        path = filedialog.askopenfilename(
+            title=f"Seleccionar archivo para {key.upper()}",
+            filetypes=[("CSV / Excel", "*.csv *.xlsx *.xls"), ("Todos", "*.*")],
+            initialdir=str(idir),
+        )
+        if not path:
+            return
+        self._set_path(key, path, auto=False)
 
     def _populate_productos(self):
         term = self._search_var.get().strip().lower()
@@ -522,7 +573,8 @@ class Paso3Reposicion(ctk.CTkFrame):
     def _selected_product_index(self):
         item = self._tbl_productos.tree.focus()
         if not item:
-            messagebox.showwarning("Sin seleccion", "Seleccione un producto de la lista.")
+            mostrar_dialogo(self, "advertencia", "Sin selección",
+                            "Seleccione un producto de la lista.")
             return None
         return int(item)
 
@@ -545,12 +597,16 @@ class Paso3Reposicion(ctk.CTkFrame):
         idx = self._selected_product_index()
         if idx is None:
             return
-        if messagebox.askyesno("Eliminar producto", "Desea eliminar el producto seleccionado?"):
+        if confirmar(self, "Eliminar producto",
+                     "¿Desea eliminar el producto seleccionado?",
+                     texto_ok="Eliminar", texto_cancel="Cancelar"):
             self._productos.pop(idx)
             self._populate_productos()
 
     def _reset_productos(self):
-        if messagebox.askyesno("Restaurar productos", "Restaurar la lista de productos por defecto?"):
+        if confirmar(self, "Restaurar productos",
+                     "¿Restaurar la lista de productos por defecto?\nSe perderán los cambios actuales.",
+                     texto_ok="Restaurar", texto_cancel="Cancelar"):
             self._productos = [p.copy() for p in PRODUCTOS]
             self._search_var.set("")
             self._populate_productos()
@@ -562,12 +618,12 @@ class ProductDialog(ctk.CTkToplevel):
     _FIELDS = [
         ("nombre_base", "Nombre Base", "entry"),
         ("col_repo", "Columna Repo", "entry"),
-        ("metodo", "Metodo", ["regresion", "promedio", "promedio_ajustado_dep"]),
+        ("metodo", "Método", ["regresion", "promedio", "promedio_ajustado_dep"]),
         ("factor_ajuste", "Clave Factor Ajuste", "entry"),
         ("param_redondeo", "Clave Umbral Redondeo", "entry"),
         ("col_stock_reseteo", "Columna Reseteo Stock", "entry"),
         ("sku_base", "SKU Base", "entry"),
-        ("desc_base", "Descripcion", "entry"),
+        ("desc_base", "Descripción", "entry"),
         ("col_consumo", "Columna Consumo", "entry"),
         ("prov_filter", "Solo Provincia", "entry"),
         ("prov_excluir", "Excluir Provincia", "entry"),
@@ -575,8 +631,8 @@ class ProductDialog(ctk.CTkToplevel):
 
     def __init__(self, parent, product_data=None):
         super().__init__(parent)
+        self.withdraw()
         self.transient(parent)
-        self.grab_set()
         self.title("Editar Producto" if product_data else "Anadir Producto")
         self.configure(fg_color=GRIS_BG)
         self.result = None
@@ -608,27 +664,33 @@ class ProductDialog(ctk.CTkToplevel):
         actions.grid(row=len(self._FIELDS), column=0, columnspan=2, pady=(14, 8))
         ctk.CTkButton(actions, text="Guardar",
                       fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-                      text_color=NEGRO, font=("Segoe UI", 11, "bold"),
+                      text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
                       width=125, height=38,
                       command=self._save).pack(side="left", padx=6)
         ctk.CTkButton(actions, text="Cancelar",
-                      fg_color=GRIS_BG, hover_color=GRIS_BORDE,
+                      fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
                       text_color=NEGRO, font=("Segoe UI", 11),
                       width=125, height=38,
                       command=self.destroy).pack(side="left", padx=6)
 
         self.update_idletasks()
-        self.geometry("+%d+%d" % (
-            parent.winfo_rootx() + 120,
-            parent.winfo_rooty() + 80,
-        ))
+        w = self.winfo_reqwidth()
+        h = self.winfo_reqheight()
+        x = parent.winfo_rootx() + 120
+        y = parent.winfo_rooty() + 80
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        self.grab_set()
         self.wait_window()
 
     def _save(self):
         required = ["nombre_base", "col_repo", "metodo", "sku_base", "desc_base"]
         for key in required:
             if not self._vars[key].get().strip():
-                messagebox.showerror("Campo requerido", f"Complete el campo '{key}'.", parent=self)
+                mostrar_dialogo(self, "error", "Campo requerido",
+                                f"Complete el campo '{key}'.")
                 return
 
         result = {}
@@ -640,13 +702,11 @@ class ProductDialog(ctk.CTkToplevel):
                 try:
                     value = int(value)
                 except ValueError:
-                    messagebox.showerror(
-                        "SKU inválido",
-                        f"El SKU debe ser un número entero. Valor ingresado: '{value}'",
-                        parent=self,
-                    )
+                    mostrar_dialogo(self, "error", "SKU inválido",
+                                    f"El SKU debe ser un número entero.\nValor ingresado: '{value}'")
                     return
             result[key] = value
 
         self.result = result
         self.destroy()
+

@@ -4,11 +4,11 @@ import queue as q_module
 import sys
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
-                      GRIS_TEXTO, GRIS_BORDE)
-from .componentes import TablaWidget
+                      GRIS_TEXTO, GRIS_BORDE, ROJO, APPLE_FILL, APPLE_HOVER)
+from .componentes import TablaWidget, PanelMetrica, mostrar_dialogo
 from ..config import REGLAS, AGENTES_A_EXCLUIR
 
 _COLS_FINAL = ["ID P.F", "NOMBRE FANTASIA", "SKU", "DESCRIPCION", "CANTIDAD", "SEGMENTO"]
@@ -28,13 +28,57 @@ class Paso4Resultados(ctk.CTkFrame):
         self._df_final    = None
         self._df_detallado = None
         self._q = q_module.Queue()
+        self._logs = []
         self._build()
 
     # ── Build ─────────────────────────────────────────────────────────────────
 
     def _build(self):
+        # ── Panel pre-cálculo ────────────────────────────────────────────────
+        self._zona_pre = ctk.CTkFrame(self, fg_color=BLANCO, corner_radius=8,
+                                      border_width=1, border_color=GRIS_BORDE)
+
+        ctk.CTkLabel(self._zona_pre,
+                     text="Archivos listos. Presione para calcular la reposición.",
+                     font=("Segoe UI", 15), text_color=NEGRO).pack(pady=(20, 12), padx=48)
+
+        ctk.CTkLabel(
+            self._zona_pre,
+            text="Necesidad = consumo proyectado × factor − stock actual. Canal Propio aplica el ajuste configurado.",
+            font=("Segoe UI", 11), text_color=GRIS_TEXTO,
+            wraplength=540,
+        ).pack(pady=(0, 14), padx=48)
+
+        self._btn_calc = ctk.CTkButton(
+            self._zona_pre, text="  CALCULAR REPOSICIÓN  ",
+            fg_color=AMARILLO, hover_color=AMARILLO_DARK,
+            text_color="#FFFFFF", font=("Segoe UI", 15, "bold"),
+            width=320, height=54, corner_radius=8,
+            command=self._ejecutar,
+        )
+        self._btn_calc.pack(pady=(0, 8))
+
+        self._progress = ctk.CTkProgressBar(self._zona_pre, mode="indeterminate",
+                                             height=6, corner_radius=3,
+                                             fg_color=APPLE_FILL,
+                                             progress_color=AMARILLO,
+                                             width=320)
+
+        self._lbl_status = ctk.CTkLabel(
+            self._zona_pre, text="",
+            font=("Segoe UI", 12), text_color=GRIS_TEXTO)
+        self._lbl_status.pack(pady=(4, 12))
+
+        log_pre, self._log_pre = self._build_log_panel(
+            self._zona_pre, titulo="Proceso de reposicion"
+        )
+        log_pre.pack(fill="x", padx=24, pady=(0, 22))
+        self._logs.append(self._log_pre)
+
+        self._zona_post = ctk.CTkFrame(self, fg_color=GRIS_BG, corner_radius=0)
+
         # ── Barra superior ───────────────────────────────────────────────────
-        bar = ctk.CTkFrame(self, fg_color=BLANCO, height=70, corner_radius=0)
+        bar = ctk.CTkFrame(self._zona_post, fg_color=BLANCO, height=70, corner_radius=0)
         bar.pack(fill="x")
         bar.pack_propagate(False)
 
@@ -45,7 +89,7 @@ class Paso4Resultados(ctk.CTkFrame):
         self._btn_exp_final = ctk.CTkButton(
             bar, text="↓  Exportar Pedidos",
             fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-            text_color=NEGRO, font=("Segoe UI", 11, "bold"),
+            text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
             width=190, height=40, corner_radius=6, state="disabled",
             command=self._exportar_final,
         )
@@ -53,56 +97,55 @@ class Paso4Resultados(ctk.CTkFrame):
 
         self._btn_exp_det = ctk.CTkButton(
             bar, text="↓  Exportar Detallado",
-            fg_color=GRIS_BG, hover_color=GRIS_BG,
+            fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
             text_color=NEGRO, font=("Segoe UI", 11),
             width=190, height=40, corner_radius=6, state="disabled",
             command=self._exportar_detallado,
         )
         self._btn_exp_det.pack(side="right", padx=4)
 
+        self._btn_recalc = ctk.CTkButton(
+            bar, text="↺  Recalcular",
+            fg_color="transparent", text_color=NEGRO,
+            hover_color=APPLE_HOVER, border_width=1, border_color=GRIS_BORDE,
+            font=("Segoe UI", 11),
+            width=130, height=40, corner_radius=6,
+            command=self._mostrar_pre,
+        )
+        # se muestra solo después de la primera ejecución exitosa
+
         # ── Layout: tabla izquierda / log derecha ────────────────────────────
-        body = ctk.CTkFrame(self, fg_color=GRIS_BG, corner_radius=0)
+        body = ctk.CTkFrame(self._zona_post, fg_color=GRIS_BG, corner_radius=0)
         body.pack(fill="both", expand=True, padx=12, pady=8)
         body.columnconfigure(0, weight=3)
         body.columnconfigure(1, weight=1)
         body.rowconfigure(0, weight=1)
 
-        # ── Panel izquierdo: botón + tabla ───────────────────────────────────
+        # ── Panel izquierdo: KPIs + tabla + filtro ───────────────────────────
         left = ctk.CTkFrame(body, fg_color=GRIS_BG, corner_radius=0)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        left.rowconfigure(1, weight=1)
+        left.rowconfigure(2, weight=1)
         left.columnconfigure(0, weight=1)
 
-        # Zona pre-cálculo
-        self._zona_pre = ctk.CTkFrame(left, fg_color=BLANCO, corner_radius=8)
-        self._zona_pre.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        # ── KPIs (ocultos hasta que haya resultados) ────────────────────────
+        self._zona_kpi = ctk.CTkFrame(left, fg_color="transparent",
+                                      corner_radius=0)
+        self._zona_kpi.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        self._zona_kpi.columnconfigure((0, 1, 2, 3), weight=1)
+        self._zona_kpi.grid_remove()
 
-        ctk.CTkLabel(self._zona_pre,
-                     text="Archivos listos. Presione para calcular la reposición.",
-                     font=("Segoe UI", 15), text_color=NEGRO).pack(pady=(18, 12))
+        self._kpi_agentes  = PanelMetrica(self._zona_kpi, "Agentes")
+        self._kpi_unidades = PanelMetrica(self._zona_kpi, "Unidades totales")
+        self._kpi_lineas   = PanelMetrica(self._zona_kpi, "Líneas de pedido")
+        self._kpi_prom     = PanelMetrica(self._zona_kpi, "Prom. unid./agente")
 
-        ctk.CTkLabel(
-            self._zona_pre,
-            text="Necesidad = consumo proyectado * factor - stock actual. Canal Propio aplica el ajuste configurado.",
-            font=("Segoe UI", 11), text_color=GRIS_TEXTO,
-            wraplength=680,
-        ).pack(pady=(0, 12))
+        self._kpi_agentes .grid(row=0, column=0, padx=(0, 4), pady=0, sticky="ew")
+        self._kpi_unidades.grid(row=0, column=1, padx=4,      pady=0, sticky="ew")
+        self._kpi_lineas  .grid(row=0, column=2, padx=4,      pady=0, sticky="ew")
+        self._kpi_prom    .grid(row=0, column=3, padx=(4, 0), pady=0, sticky="ew")
 
-        self._btn_calc = ctk.CTkButton(
-            self._zona_pre, text="  CALCULAR REPOSICIÓN  ",
-            fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-            text_color=NEGRO, font=("Segoe UI", 15, "bold"),
-            width=320, height=54, corner_radius=8,
-            command=self._ejecutar,
-        )
-        self._btn_calc.pack(pady=(0, 8))
-
-        # Barra de progreso (oculta inicialmente, dentro de _zona_pre)
-        self._progress = ctk.CTkProgressBar(self._zona_pre, mode="indeterminate",
-                                             height=6, corner_radius=3,
-                                             fg_color="#E2E8F0",
-                                             progress_color=AMARILLO,
-                                             width=320)
+        # Filtro por producto
+        self._build_filtro(left)
 
         # Tabla de resultados
         self._tbl = TablaWidget(
@@ -111,42 +154,102 @@ class Paso4Resultados(ctk.CTkFrame):
                     "ID P.F": 80, "SKU": 100, "CANTIDAD": 80},
             fg_color=GRIS_BG,
         )
-        self._tbl.grid(row=1, column=0, sticky="nsew")
+        self._tbl.grid(row=2, column=0, sticky="nsew")
 
-        # Filtro por producto
-        self._build_filtro(left)
-
-        # ── Panel derecho: log ───────────────────────────────────────────────
-        right = ctk.CTkFrame(body, fg_color=BLANCO, corner_radius=10,
+        # ── Panel derecho: log (Estilo macOS Light Terminal Premium) ──────────
+        right = ctk.CTkFrame(body, fg_color=BLANCO, corner_radius=8,
                              border_width=1, border_color=GRIS_BORDE)
         right.grid(row=0, column=1, sticky="nsew")
         right.rowconfigure(1, weight=1)
         right.columnconfigure(0, weight=1)
 
-        hdr_log = ctk.CTkFrame(right, fg_color="transparent")
-        hdr_log.grid(row=0, column=0, sticky="ew", padx=6, pady=4)
+        # Barra de título macOS (3 botones de colores de Apple)
+        mac_bar = ctk.CTkFrame(right, fg_color=APPLE_FILL, height=36, corner_radius=8)
+        mac_bar.grid(row=0, column=0, sticky="ew")
+        mac_bar.pack_propagate(False)
+        
+        # Separador inferior de la barra de título
+        ctk.CTkFrame(mac_bar, fg_color=GRIS_BORDE, height=1, corner_radius=0).pack(side="bottom", fill="x")
 
-        ctk.CTkLabel(hdr_log, text="Log del proceso",
-                     font=("Segoe UI", 11, "bold"),
-                     text_color=NEGRO).pack(side="left", padx=4)
+        # Tres botones circulares de colores macOS
+        dots = ctk.CTkFrame(mac_bar, fg_color="transparent")
+        dots.pack(side="left", padx=12, pady=10)
+        
+        ctk.CTkFrame(dots, fg_color="#FF5F56", width=12, height=12, corner_radius=6).pack(side="left", padx=3)
+        ctk.CTkFrame(dots, fg_color="#FFBD2E", width=12, height=12, corner_radius=6).pack(side="left", padx=3)
+        ctk.CTkFrame(dots, fg_color="#27C93F", width=12, height=12, corner_radius=6).pack(side="left", padx=3)
+
+        ctk.CTkLabel(mac_bar, text="Proceso de reposicion",
+                     font=("Segoe UI", 11),
+                     text_color=GRIS_TEXTO).pack(side="left", padx=8)
 
         ctk.CTkButton(
-            hdr_log, text="Copiar",
-            fg_color=GRIS_BG, hover_color="#E2E8F0",
+            mac_bar, text="Copiar",
+            fg_color=APPLE_HOVER, hover_color=GRIS_BORDE,
             text_color=NEGRO, font=("Segoe UI", 10),
-            width=60, height=24, corner_radius=4,
+            width=60, height=22, corner_radius=5,
             command=self._copiar_log,
-        ).pack(side="right", padx=4)
+        ).pack(side="right", padx=12, pady=7)
 
         self._log = ctk.CTkTextbox(right, font=("Consolas", 11),
-                                    fg_color=GRIS_BG, corner_radius=0,
-                                    text_color=GRIS_TEXTO, state="disabled")
-        self._log.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 4))
+                                    fg_color=BLANCO, corner_radius=0,
+                                    text_color=NEGRO, state="disabled",
+                                    border_width=0, wrap="word")
+        self._log.grid(row=1, column=0, sticky="nsew", padx=6, pady=(0, 6))
+
+        # Configurar tags de color del terminal de Apple (Versión Light)
+        self._log.tag_config("info", foreground="#007AFF")    # Azul Apple Light
+        self._log.tag_config("success", foreground="#34C759") # Verde Apple Light
+        self._log.tag_config("warning", foreground="#FF9500") # Naranja Apple Light
+        self._log.tag_config("error", foreground="#FF3B30")   # Rojo Apple Light
+        self._logs.append(self._log)
+
+        self._mostrar_zona("pre")
+
+    def _build_log_panel(self, parent, titulo):
+        panel = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=8,
+                             border_width=1, border_color=GRIS_BORDE)
+        panel.rowconfigure(1, weight=1)
+        panel.columnconfigure(0, weight=1)
+
+        mac_bar = ctk.CTkFrame(panel, fg_color=APPLE_FILL, height=36, corner_radius=8)
+        mac_bar.grid(row=0, column=0, sticky="ew")
+        mac_bar.pack_propagate(False)
+        ctk.CTkFrame(mac_bar, fg_color=GRIS_BORDE, height=1, corner_radius=0).pack(side="bottom", fill="x")
+
+        dots = ctk.CTkFrame(mac_bar, fg_color="transparent")
+        dots.pack(side="left", padx=12, pady=10)
+        ctk.CTkFrame(dots, fg_color="#FF5F56", width=12, height=12, corner_radius=6).pack(side="left", padx=3)
+        ctk.CTkFrame(dots, fg_color="#FFBD2E", width=12, height=12, corner_radius=6).pack(side="left", padx=3)
+        ctk.CTkFrame(dots, fg_color="#27C93F", width=12, height=12, corner_radius=6).pack(side="left", padx=3)
+
+        ctk.CTkLabel(mac_bar, text=titulo,
+                     font=("Segoe UI", 11),
+                     text_color=GRIS_TEXTO).pack(side="left", padx=8)
+
+        ctk.CTkButton(
+            mac_bar, text="Copiar",
+            fg_color=APPLE_HOVER, hover_color=GRIS_BORDE,
+            text_color=NEGRO, font=("Segoe UI", 10),
+            width=60, height=22, corner_radius=5,
+            command=self._copiar_log,
+        ).pack(side="right", padx=12, pady=7)
+
+        log = ctk.CTkTextbox(panel, font=("Consolas", 11),
+                             fg_color=BLANCO, corner_radius=0,
+                             text_color=NEGRO, state="disabled",
+                             border_width=0, wrap="word", height=170)
+        log.grid(row=1, column=0, sticky="nsew", padx=6, pady=(0, 6))
+        log.tag_config("info", foreground="#007AFF")
+        log.tag_config("success", foreground="#34C759")
+        log.tag_config("warning", foreground="#FF9500")
+        log.tag_config("error", foreground="#FF3B30")
+        return panel, log
 
     def _build_filtro(self, parent):
         import tkinter as tk
         bar = ctk.CTkFrame(parent, fg_color="transparent")
-        bar.grid(row=2, column=0, sticky="ew", pady=(6, 0))
+        bar.grid(row=1, column=0, sticky="ew", pady=(0, 6))
 
         ctk.CTkLabel(bar, text="Filtrar por producto:",
                      font=("Segoe UI", 11), text_color=GRIS_TEXTO).pack(
@@ -157,7 +260,7 @@ class Paso4Resultados(ctk.CTkFrame):
             bar, variable=self._var_prod,
             values=["(Todos)"],
             fg_color=GRIS_BG, button_color=GRIS_BG,
-            button_hover_color="#E2E8F0", text_color=NEGRO,
+            button_hover_color=APPLE_HOVER, text_color=NEGRO,
             width=270, height=36,
             font=("Segoe UI", 11),
             command=self._filtrar,
@@ -167,29 +270,59 @@ class Paso4Resultados(ctk.CTkFrame):
     # ── Ejecución ─────────────────────────────────────────────────────────────
 
     def on_mostrar(self):
-        pass
+        if self._df_final is None:
+            self._mostrar_zona("pre")
+
+    def _mostrar_zona(self, zona):
+        if zona == "pre":
+            self._zona_post.place_forget()
+            self._zona_pre.place(relx=0.5, rely=0.35, anchor="center")
+        else:
+            self._zona_pre.place_forget()
+            self._zona_post.place(relx=0, rely=0, relwidth=1, relheight=1)
 
     def _copiar_log(self):
-        texto = self._log.get("1.0", "end").strip()
+        activo = self._log_pre if self._zona_pre.winfo_ismapped() else self._log
+        texto = activo.get("1.0", "end").strip()
         if texto:
             self.clipboard_clear()
             self.clipboard_append(texto)
 
     def _log_write(self, texto):
-        self._log.configure(state="normal")
-        self._log.insert("end", texto + "\n")
-        self._log.see("end")
-        self._log.configure(state="disabled")
+        tag = None
+        texto_limpio = texto.strip()
+        tl = texto_limpio.lower()
+        if "✓" in texto_limpio or "exitosamente" in tl or "exitoso" in tl:
+            tag = "success"
+        elif (texto_limpio.startswith("✗") or "error" in tl
+              or "falló" in tl or "no encontrado" in tl):
+            tag = "error"
+        elif "advertencia" in tl or "atención" in tl or "warning" in tl:
+            tag = "warning"
+        elif texto_limpio.startswith("Paso") or "paso" in tl or "iniciando" in tl:
+            tag = "info"
+            
+        for log in self._logs:
+            log.configure(state="normal")
+            if tag:
+                log.insert("end", texto + "\n", tag)
+            else:
+                log.insert("end", texto + "\n")
+            log.see("end")
+            log.configure(state="disabled")
 
     def _log_clear(self):
-        self._log.configure(state="normal")
-        self._log.delete("1.0", "end")
-        self._log.configure(state="disabled")
+        for log in self._logs:
+            log.configure(state="normal")
+            log.delete("1.0", "end")
+            log.configure(state="disabled")
 
     def _ejecutar(self):
+        self._lbl_status.configure(text="", text_color=GRIS_TEXTO)
         self._btn_calc.configure(state="disabled", text="  Calculando...  ")
         self._btn_exp_final.configure(state="disabled")
         self._btn_exp_det.configure(state="disabled")
+        self._zona_kpi.grid_remove()
         self._log_clear()
         self._progress.pack(pady=(0, 16))
         self._progress.start()
@@ -214,7 +347,6 @@ class Paso4Resultados(ctk.CTkFrame):
         sys.stdout = _Writer(self._q)
         try:
             paths   = self._get_paths()
-            maestro = self._get_maestro()
             params  = self._get_params()
             productos = self._get_productos()
 
@@ -230,6 +362,30 @@ class Paso4Resultados(ctk.CTkFrame):
                     "Archivos faltantes para calcular la reposición:\n"
                     + "\n".join(f"  • {lbl}" for lbl in faltantes)
                 )
+            _nombres = {
+                "maestro_actual": "Maestro Stock Actual",
+                "consumo_mes_1": "Consumo M-3",
+                "consumo_mes_2": "Consumo M-2",
+                "consumo_mes_3": "Consumo M-1",
+                "agentes": "Agentes Canal Propio",
+            }
+            no_existen = []
+            for key, path_str in paths.items():
+                if not path_str or path_str == "__GENERADO_PASO_2__":
+                    continue
+                if not Path(path_str).exists():
+                    no_existen.append((_nombres.get(key, key), Path(path_str).name))
+            if no_existen:
+                detalle = "\n".join(f"  - {lbl}: {nombre}" for lbl, nombre in no_existen)
+                raise ValueError(
+                    "Los archivos seleccionados ya no estan disponibles en Data/.\n\n"
+                    "Si este paso ya se calculo correctamente, la aplicacion los movio a Data_OLD/ "
+                    "para evitar reprocesarlos por error.\n\n"
+                    "Para volver a calcular, cargue un nuevo juego de archivos en el Paso 3.\n\n"
+                    f"Archivos no encontrados:\n{detalle}"
+                )
+
+            maestro = self._get_maestro()
             if maestro is None:
                 raise ValueError(
                     "No hay Maestro Stock disponible.\n"
@@ -269,6 +425,9 @@ class Paso4Resultados(ctk.CTkFrame):
                 self._progress.pack_forget()
                 self._btn_calc.configure(
                     state="normal", text="  CALCULAR REPOSICIÓN  ")
+                self._lbl_status.configure(
+                    text="Tiempo de espera agotado. Intente nuevamente.",
+                    text_color=ROJO)
                 self._log_write("\n✗ Tiempo de espera agotado. Intente nuevamente.")
                 return
             self.after(150, self._revisar_cola)
@@ -286,10 +445,12 @@ class Paso4Resultados(ctk.CTkFrame):
             if ok:
                 self._df_final     = df_fin
                 self._df_detallado = df_det
+                self._btn_recalc.pack(side="right", padx=8)
                 try:
                     self._cargar_tabla(df_fin)
+                    self._actualizar_kpis(df_fin)
                 except Exception as exc:
-                    messagebox.showerror("Error mostrando tabla", str(exc))
+                    mostrar_dialogo(self, "error", "Error mostrando tabla", str(exc))
                 productos = self._get_productos()
                 self._cb_prod.configure(
                     values=["(Todos)"] + [p.get("desc_base", "") for p in productos]
@@ -297,10 +458,20 @@ class Paso4Resultados(ctk.CTkFrame):
                 self._btn_exp_final.configure(state="normal")
                 self._btn_exp_det.configure(state="normal")
                 self._log_write(f"\n✓ {msg}")
+                self._mostrar_zona("post")
                 self._archivar_data_files()
             else:
+                self._lbl_status.configure(
+                    text=f"Error: {msg.splitlines()[0]}", text_color=ROJO)
                 self._log_write(f"\n✗ ERROR:\n{msg}")
-                messagebox.showerror("Error en reposición", msg[:400])
+                mostrar_dialogo(self, "error", "Error en reposición", msg[:400], copiable=True)
+
+    def _mostrar_pre(self):
+        self._mostrar_zona("pre")
+        self._btn_recalc.pack_forget()
+        self._btn_calc.configure(state="normal", text="  CALCULAR REPOSICIÓN  ")
+        self._lbl_status.configure(text="", text_color=GRIS_TEXTO)
+        self._zona_kpi.grid_remove()
 
     # ── Archivado Data_OLD ────────────────────────────────────────────────────
 
@@ -380,6 +551,22 @@ class Paso4Resultados(ctk.CTkFrame):
             self._df_final["DESCRIPCION"] == valor
         ]
         self._cargar_tabla(df)
+        self._actualizar_kpis(df)
+
+    def _actualizar_kpis(self, df):
+        if df is None or df.empty:
+            self._zona_kpi.grid_remove()
+            return
+        agentes  = int(df["ID P.F"].nunique())
+        unidades = int(df["CANTIDAD"].sum())
+        lineas   = len(df)
+        prom     = round(unidades / agentes, 1) if agentes else 0
+
+        self._kpi_agentes .set(f"{agentes:,}")
+        self._kpi_unidades.set(f"{unidades:,}")
+        self._kpi_lineas  .set(f"{lineas:,}")
+        self._kpi_prom    .set(f"{prom:,.1f}")
+        self._zona_kpi.grid()
 
     # ── Exportar ──────────────────────────────────────────────────────────────
 
@@ -396,9 +583,10 @@ class Paso4Resultados(ctk.CTkFrame):
             return
         try:
             self._df_final.to_excel(path, sheet_name="REPOSICION", index=False)
-            messagebox.showinfo("Exportado", f"Pedidos guardados en:\n{path}")
+            mostrar_dialogo(self, "info", "Archivo exportado",
+                            f"Pedidos guardados en:\n{path}")
         except Exception as exc:
-            messagebox.showerror("Error al exportar", str(exc))
+            mostrar_dialogo(self, "error", "Error al exportar", str(exc))
 
     def _exportar_detallado(self):
         if self._df_detallado is None:
@@ -413,6 +601,8 @@ class Paso4Resultados(ctk.CTkFrame):
             return
         try:
             self._df_detallado.to_excel(path, sheet_name="DETALLE")
-            messagebox.showinfo("Exportado", f"Detallado guardado en:\n{path}")
+            mostrar_dialogo(self, "info", "Archivo exportado",
+                            f"Detallado guardado en:\n{path}")
         except Exception as exc:
-            messagebox.showerror("Error al exportar", str(exc))
+            mostrar_dialogo(self, "error", "Error al exportar", str(exc))
+

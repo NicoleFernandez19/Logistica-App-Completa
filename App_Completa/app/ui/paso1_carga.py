@@ -6,7 +6,8 @@ from pathlib import Path
 from tkinter import filedialog
 import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
-                      GRIS_TEXTO, GRIS_BORDE, VERDE, INFO_BG, INFO_BORDE)
+                      GRIS_TEXTO, GRIS_BORDE, VERDE, INFO_BG, INFO_BORDE,
+                      APPLE_FILL, APPLE_HOVER)
 
 _ARCHIVOS = [
     ("tiv",          "TIV",             "Transacciones del mes por agente"),
@@ -73,20 +74,33 @@ class Paso1Carga(ctk.CTkFrame):
                      font=("Segoe UI", 16, "bold"),
                      text_color=NEGRO).pack(side="left", padx=24)
 
+        status = ctk.CTkFrame(bar, fg_color="transparent")
+        status.pack(side="left", padx=(0, 18))
+
+        ctk.CTkLabel(status, text="archivos listos:",
+                     font=("Segoe UI", 12), text_color=GRIS_TEXTO).pack(side="left")
+
         self._lbl_counter = ctk.CTkLabel(
-            bar, text="0 / 11",
+            status, text="0 / 11",
             font=("Segoe UI", 14, "bold"),
             text_color=GRIS_TEXTO)
-        self._lbl_counter.pack(side="right", padx=8)
+        self._lbl_counter.pack(side="left", padx=(8, 0))
 
-        ctk.CTkLabel(bar, text="archivos listos:",
-                     font=("Segoe UI", 12), text_color=GRIS_TEXTO).pack(side="right")
+        actions = ctk.CTkFrame(bar, fg_color="transparent")
+        actions.pack(side="left")
 
-        ctk.CTkButton(bar, text="⟳  Auto-detectar",
+        ctk.CTkButton(actions, text="Examinar",
+                      fg_color=APPLE_FILL, hover_color=GRIS_BORDE,
+                      text_color=NEGRO, font=("Segoe UI", 12),
+                      border_width=1, border_color=GRIS_BORDE,
+                      width=120, height=40, corner_radius=6,
+                      command=self._examinar_archivos).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(actions, text="⟳  Auto-detectar",
                       fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-                      text_color=NEGRO, font=("Segoe UI", 12, "bold"),
+                      text_color="#FFFFFF", font=("Segoe UI", 12, "bold"),
                       width=170, height=40, corner_radius=6,
-                      command=self._autodetectar).pack(side="right", padx=20)
+                      command=self._autodetectar).pack(side="left")
 
         # ── Grid de archivos ─────────────────────────────────────────────────
         guide = ctk.CTkFrame(self, fg_color=INFO_BG, height=44, corner_radius=0)
@@ -107,7 +121,7 @@ class Paso1Carga(ctk.CTkFrame):
             self._fila(scroll, key, label, desc, row=idx // 2, col=idx % 2)
 
     def _fila(self, parent, key, label, desc, row, col):
-        cell = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=10,
+        cell = ctk.CTkFrame(parent, fg_color=BLANCO, corner_radius=8,
                             border_width=1, border_color=GRIS_BORDE)
         cell.grid(row=row, column=col, sticky="ew", padx=8, pady=6)
 
@@ -115,9 +129,10 @@ class Paso1Carga(ctk.CTkFrame):
         top.pack(fill="x", padx=14, pady=(12, 4))
 
         ctk.CTkLabel(top, text=label, font=("Segoe UI", 12, "bold"),
-                     text_color=NEGRO).pack(side="left")
-        ctk.CTkLabel(top, text=f"  {desc}", font=("Segoe UI", 10),
-                     text_color=GRIS_TEXTO).pack(side="left")
+                     text_color=NEGRO).pack(anchor="w")
+        ctk.CTkLabel(top, text=desc, font=("Segoe UI", 10),
+                     text_color=GRIS_TEXTO, wraplength=440,
+                     justify="left").pack(anchor="w", pady=(2, 0))
 
         inp = ctk.CTkFrame(cell, fg_color="transparent")
         inp.pack(fill="x", padx=14, pady=(0, 12))
@@ -126,18 +141,18 @@ class Paso1Carga(ctk.CTkFrame):
         self._vars[key] = var
 
         lbl = ctk.CTkLabel(inp, textvariable=var,
-                            fg_color=GRIS_BG, corner_radius=6,
+                            fg_color=APPLE_FILL, corner_radius=6,
                             font=("Segoe UI", 11), text_color=GRIS_TEXTO,
                             anchor="w", height=38)
         lbl.pack(side="left", fill="x", expand=True)
         self._lbls[key] = lbl
 
-        ctk.CTkButton(inp, text="Examinar",
-                      fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-                      text_color=NEGRO, font=("Segoe UI", 11),
-                      width=110, height=38, corner_radius=6,
-                      command=lambda k=key: self._browse(k)
-                      ).pack(side="right", padx=(8, 0))
+        btn = ctk.CTkButton(inp, text="...", width=36, height=38,
+                            fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
+                            text_color=NEGRO, border_width=1, border_color=GRIS_BORDE,
+                            corner_radius=6,
+                            command=lambda k=key: self._examinar_individual(k))
+        btn.pack(side="right", padx=(8, 0))
 
     # ── Auto-detección ────────────────────────────────────────────────────────
 
@@ -230,18 +245,48 @@ class Paso1Carga(ctk.CTkFrame):
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
 
-    def _browse(self, key):
+    def _examinar_archivos(self):
+        base = Path(sys.argv[0]).resolve().parent
+        data_dir = base / "Data"
+        data_dir.mkdir(exist_ok=True)
+        paths = filedialog.askopenfilenames(
+            title="Seleccionar archivos de consumo",
+            filetypes=[("CSV / Excel", "*.csv *.xlsx *.xls"), ("Todos", "*.*")],
+            initialdir=str(data_dir),
+        )
+        if not paths:
+            return
+
+        pool = {Path(p).stem.lower(): Path(p) for p in paths}
+        for key, nombres in _AUTO_NOMBRES.items():
+            match = None
+            for nombre in nombres:
+                match = next(
+                    (p for stem, p in pool.items() if nombre in stem),
+                    None,
+                )
+                if match:
+                    break
+            if match:
+                self._set_path(key, str(match), match.name, auto=False)
+                pool = {s: p for s, p in pool.items() if p != match}
+
+        self._actualizar_counter()
+
+    def _examinar_individual(self, key):
         base = Path(sys.argv[0]).resolve().parent
         data_dir = base / "Data"
         data_dir.mkdir(exist_ok=True)
         path = filedialog.askopenfilename(
-            title=f"Seleccionar {key.upper()}",
+            title=f"Seleccionar archivo para {key.upper()}",
             filetypes=[("CSV / Excel", "*.csv *.xlsx *.xls"), ("Todos", "*.*")],
             initialdir=str(data_dir),
         )
-        if path:
-            self._set_path(key, path, Path(path).name, auto=False)
-            self._actualizar_counter()
+        if not path:
+            return
+        p = Path(path)
+        self._set_path(key, str(p), p.name, auto=False)
+        self._actualizar_counter()
 
     def _set_path(self, key, path, nombre, auto):
         self._paths[key] = path
@@ -256,3 +301,4 @@ class Paso1Carga(ctk.CTkFrame):
         self._lbl_counter.configure(
             text=f"{n} / {total}", text_color=color)
         self._on_change(n)
+

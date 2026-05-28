@@ -144,6 +144,7 @@ def ejecutar_proceso_reposicion(
         cols_texto = [
             c for c in df_union.columns
             if "NOMBRE FANTASIA" in c or c in {"PROV", "SEGMENTO"}
+            or c.startswith("SEGMENTO_m")
         ]
         cols_numericas = [c for c in df_union.columns if c not in cols_texto]
         if cols_texto:
@@ -160,6 +161,17 @@ def ejecutar_proceso_reposicion(
             df_union["SUBSEGMENTACION"] = df_union["SUBSEGMENTACION"].where(
                 df_union["SUBSEGMENTACION"] != 0, 1
             )
+        # Para agentes presentes en el historial pero ausentes del maestro actual,
+        # recuperar SEGMENTO desde el archivo histórico más reciente disponible.
+        if "SEGMENTO" in df_union.columns:
+            _seg_hist = next(
+                (c for c in ["SEGMENTO_m3", "SEGMENTO_m2", "SEGMENTO_m1"]
+                 if c in df_union.columns),
+                None,
+            )
+            if _seg_hist:
+                mask_vacio = df_union["SEGMENTO"] == ""
+                df_union.loc[mask_vacio, "SEGMENTO"] = df_union.loc[mask_vacio, _seg_hist]
 
         print("Paso 5/8: Calculando stock ajustado...")
         for stock_col, consumo_col in [
@@ -253,7 +265,9 @@ def ejecutar_proceso_reposicion(
             df_p.rename(columns=ren, inplace=True)
 
             if "NOMBRE FANTASIA" in df_p.columns and _col_hist and _col_hist in df_p.columns:
-                # Llenar vacíos del maestro con los nombres del histórico
+                # Llenar vacíos del maestro con los nombres del histórico.
+                # Convertimos las cadenas vacías ("" o espacios) a NaN para que fillna funcione.
+                df_p["NOMBRE FANTASIA"] = df_p["NOMBRE FANTASIA"].replace(r"^\s*$", np.nan, regex=True)
                 df_p["NOMBRE FANTASIA"] = df_p["NOMBRE FANTASIA"].fillna(df_p[_col_hist]).fillna("")
                 df_p.drop(columns=[_col_hist], inplace=True, errors="ignore")
             elif "NOMBRE FANTASIA" not in df_p.columns:

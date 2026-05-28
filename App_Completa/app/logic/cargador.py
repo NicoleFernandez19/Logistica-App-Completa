@@ -40,7 +40,7 @@ def _leer(path):
                 ultimo_error = exc
         if df is None:
             raise ultimo_error
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
     return df
 
 
@@ -234,10 +234,10 @@ def cargar_resma_env(path):
 
 def cargar_fajas(path):
     df = _leer(path)
-    _validar(df, ["ID_PF", "Qx FAJAS"], path)
+    _validar(df, ["ID_PF", "QX FAJAS"], path)
     df["ID_PF"] = _strip_id(df["ID_PF"])
-    _num(df, ["Qx FAJAS"])
-    df["FAJAS"] = df["Qx FAJAS"].apply(lambda x: math.ceil(x / 200) if x > 0 else 0)
+    _num(df, ["QX FAJAS"])
+    df["FAJAS"] = df["QX FAJAS"].apply(lambda x: math.ceil(x / 200) if x > 0 else 0)
     return df
 
 

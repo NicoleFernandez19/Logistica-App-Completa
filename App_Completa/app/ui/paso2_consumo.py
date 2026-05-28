@@ -4,12 +4,13 @@ import queue as q_module
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 import pandas as pd
 import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
-                      GRIS_TEXTO, VERDE, VERDE_BG, ROJO, INFO_BG, GRIS_BORDE)
-from .componentes import TablaWidget, PanelMetrica
+                      GRIS_TEXTO, VERDE, VERDE_BG, ROJO, INFO_BG, GRIS_BORDE,
+                      APPLE_FILL, APPLE_HOVER, APPLE_SELECTED)
+from .componentes import TablaWidget, PanelMetrica, mostrar_dialogo
 
 _METRICAS = [
     ("CONSUMO\nROLLOS",   "consumo_rollo"),
@@ -43,68 +44,77 @@ class Paso2Consumo(ctk.CTkFrame):
 
     def _build(self):
         # ── Panel pre-cálculo ────────────────────────────────────────────────
-        self._zona_pre = ctk.CTkFrame(self, fg_color=GRIS_BG, corner_radius=0)
+        self._zona_pre = ctk.CTkFrame(self, fg_color=BLANCO, corner_radius=8,
+                                      border_width=1, border_color=GRIS_BORDE)
 
         ctk.CTkLabel(self._zona_pre,
                      text="Archivos listos. Presione para calcular el consumo mensual.",
-                     font=("Segoe UI", 17), text_color=NEGRO).pack(pady=(0, 20))
+                     font=("Segoe UI", 15), text_color=NEGRO).pack(pady=(20, 12), padx=48)
 
         ctk.CTkLabel(
             self._zona_pre,
             text="Fórmula:  Stock final = Stock inicial + Envíos del mes − Consumo calculado",
-            font=("Segoe UI", 13), text_color=GRIS_TEXTO,
-            wraplength=640,
-        ).pack(pady=(0, 20))
+            font=("Segoe UI", 11), text_color=GRIS_TEXTO,
+            wraplength=540,
+        ).pack(pady=(0, 14), padx=48)
 
         self._btn_calc = ctk.CTkButton(
             self._zona_pre, text="  CALCULAR CONSUMO  ",
             fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-            text_color=NEGRO, font=("Segoe UI", 16, "bold"),
-            width=320, height=58, corner_radius=8,
+            text_color="#FFFFFF", font=("Segoe UI", 15, "bold"),
+            width=320, height=54, corner_radius=8,
             command=self._ejecutar,
         )
-        self._btn_calc.pack()
+        self._btn_calc.pack(pady=(0, 8))
+
+        self._progress = ctk.CTkProgressBar(self._zona_pre, mode="indeterminate",
+                                             height=6, corner_radius=3,
+                                             fg_color=APPLE_FILL,
+                                             progress_color=AMARILLO,
+                                             width=320)
 
         self._lbl_status = ctk.CTkLabel(
             self._zona_pre, text="",
             font=("Segoe UI", 12), text_color=GRIS_TEXTO)
-        self._lbl_status.pack(pady=12)
+        self._lbl_status.pack(pady=(4, 20))
 
-        self._zona_pre.place(relx=0.5, rely=0.35, anchor="center")
+        self._zona_pre.place(relx=0.5, rely=0.38, anchor="center")
 
         # ── Panel post-cálculo ───────────────────────────────────────────────
         self._zona_post = ctk.CTkFrame(self, fg_color=GRIS_BG, corner_radius=0)
 
         # Sub-barra
-        bar = ctk.CTkFrame(self._zona_post, fg_color=BLANCO, height=66,
+        bar = ctk.CTkFrame(self._zona_post, fg_color=BLANCO, height=70,
                            corner_radius=0)
         bar.pack(fill="x")
         bar.pack_propagate(False)
 
-        ctk.CTkLabel(bar, text="Resultados del mes",
+        ctk.CTkLabel(bar, text="Cálculo de Consumo  —  Resultados del mes",
                      font=("Segoe UI", 15, "bold"),
                      text_color=NEGRO).pack(side="left", padx=16)
 
         ctk.CTkButton(bar, text="↺  Recalcular",
-                      fg_color=GRIS_BG, hover_color=GRIS_BG,
-                      text_color=NEGRO, font=("Segoe UI", 11),
+                      fg_color="transparent", text_color=NEGRO,
+                      hover_color=APPLE_HOVER, border_width=1, border_color=GRIS_BORDE,
+                      font=("Segoe UI", 11),
                       width=130, height=40, corner_radius=6,
                       command=self._volver_a_calcular).pack(side="right", padx=8)
 
         ctk.CTkButton(bar, text="↓  Exportar MaestroStock",
                       fg_color=AMARILLO, hover_color=AMARILLO_DARK,
-                      text_color=NEGRO, font=("Segoe UI", 11, "bold"),
+                      text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
                       width=220, height=40, corner_radius=6,
                       command=self._exportar).pack(side="right", padx=8)
 
         # Métricas
-        met = ctk.CTkFrame(self._zona_post, fg_color=GRIS_BG, corner_radius=0)
-        met.pack(fill="x", pady=(0, 2))
+        met = ctk.CTkFrame(self._zona_post, fg_color="transparent",
+                           corner_radius=0)
+        met.pack(fill="x", padx=12, pady=(10, 4))
         self._mvar = {}
         self._met_panels = {}
         for label, key in _METRICAS:
-            p = PanelMetrica(met, label, fg_color=GRIS_BG)
-            p.pack(side="left", expand=True, fill="x", padx=7, pady=12)
+            p = PanelMetrica(met, label)
+            p.pack(side="left", expand=True, fill="x", padx=4, pady=4)
             self._mvar[key] = p
             self._met_panels[key] = p
 
@@ -116,8 +126,8 @@ class Paso2Consumo(ctk.CTkFrame):
         # Tabs
         self._tabs = ctk.CTkTabview(self._zona_post, fg_color=BLANCO,
                                      segmented_button_fg_color=GRIS_BG,
-                                     segmented_button_selected_color=AMARILLO,
-                                     segmented_button_selected_hover_color=AMARILLO_DARK,
+                                     segmented_button_selected_color=APPLE_SELECTED,
+                                     segmented_button_selected_hover_color=APPLE_SELECTED,
                                      segmented_button_unselected_color=GRIS_BG,
                                      text_color=NEGRO)
         self._tabs.pack(fill="both", expand=True, padx=12, pady=(0, 12))
@@ -148,7 +158,7 @@ class Paso2Consumo(ctk.CTkFrame):
         self._cb_canal = ctk.CTkOptionMenu(
             bar, variable=self._var_canal, values=["(Todos)"],
             fg_color=GRIS_BG, button_color=GRIS_BG,
-            button_hover_color="#E2E8F0", text_color=NEGRO,
+            button_hover_color=APPLE_HOVER, text_color=NEGRO,
             width=205, height=36,
             font=("Segoe UI", 11),
             command=self._filtrar_consumo,
@@ -241,39 +251,21 @@ class Paso2Consumo(ctk.CTkFrame):
         self._df_tiv = None
         self._df_maestro = None
         self._btn_calc.configure(state="normal", text="  CALCULAR CONSUMO  ")
+        self._progress.stop()
+        self._progress.pack_forget()
         self._lbl_status.configure(text="")
         self._mostrar_zona("pre")
 
     def _mostrar_advertencias(self, advertencias):
-        texto = "\n\n---\n\n".join(advertencias)
-        win = tk.Toplevel(self)
-        win.title("Advertencias del cálculo")
-        win.geometry("560x320")
-        win.resizable(True, True)
-        win.grab_set()
-
-        txt = tk.Text(win, wrap="word", font=("Segoe UI", 10),
-                      relief="flat", padx=10, pady=10)
-        txt.pack(fill="both", expand=True)
-        txt.insert("1.0", texto)
-        txt.bind("<Key>", lambda e: "break")          # evita edición
-        txt.bind("<Control-a>", lambda e: (
-            txt.tag_add("sel", "1.0", "end"), "break"))
-
-        bar = tk.Frame(win)
-        bar.pack(fill="x", padx=10, pady=8)
-
-        def _copiar():
-            win.clipboard_clear()
-            win.clipboard_append(txt.get("1.0", "end").strip())
-
-        tk.Button(bar, text="Copiar", command=_copiar, width=10).pack(side="right")
-        tk.Button(bar, text="Cerrar", command=win.destroy, width=10).pack(
-            side="right", padx=6)
+        texto = "\n\n──────────\n\n".join(advertencias)
+        mostrar_dialogo(self, "advertencia", "Advertencias del cálculo", texto,
+                        copiable=True)
 
     def _ejecutar(self):
         self._btn_calc.configure(state="disabled", text="  Calculando...  ")
-        self._lbl_status.configure(text="Leyendo archivos...", text_color=GRIS_TEXTO)
+        self._lbl_status.configure(text="")
+        self._progress.pack(pady=(0, 8))
+        self._progress.start()
         self.update_idletasks()
         self._cola_intentos = 0
         threading.Thread(target=self._hilo_calculo, daemon=True).start()
@@ -303,6 +295,22 @@ class Paso2Consumo(ctk.CTkFrame):
                     "Archivos no seleccionados:\n"
                     + "\n".join(f"  • {lbl}" for lbl in faltantes)
                 )
+
+            no_existen = [
+                (lbl, paths[k]) for k, lbl in _obligatorios.items()
+                if k in paths and not Path(paths[k]).exists()
+            ]
+            if no_existen:
+                detalle = "\n".join(
+                    f"  • {lbl}: {Path(p).name}" for lbl, p in no_existen
+                )
+                raise ValueError(
+                    "Los siguientes archivos ya no se encuentran en su ubicación original.\n"
+                    "Puede que hayan sido movidos o eliminados.\n"
+                    "Por favor, vuelva al Paso 1 y selecciónelos nuevamente:\n\n"
+                    + detalle
+                )
+
             tiv        = cargar_tiv(paths["tiv"])
             maestro    = cargar_maestro(paths["maestro"])
             fac        = cargar_fac_termicas(paths["fac_termicas"])
@@ -333,25 +341,40 @@ class Paso2Consumo(ctk.CTkFrame):
             if "CANAL_AGENTE_AGRUP" in tiv.columns:
                 n_tipo2 = int((df_tiv["TIPO_AGENTE"] == 2).sum())
                 if n_tipo2 == 0:
-                    valores = (
-                        tiv["CANAL_AGENTE_AGRUP"]
-                        .dropna()
-                        .astype(str)
-                        .str.strip()
-                        .unique()
-                        .tolist()
-                    )
-                    advertencias.append(
-                        "La columna 'CANAL_AGENTE_AGRUP' está presente en el TIV "
-                        "pero ningún agente quedó clasificado como TIPO 2 (Centros y Asistidos).\n\n"
-                        f"Valores encontrados en la columna: {valores}\n\n"
-                        "Verifique que alguno de esos valores sea 'Centros y Asistidos'."
-                    )
+                    col_ca = "CANAL_AGENTE_AGRUP"
+                    ca_mask = (
+                        df_tiv[col_ca].astype(str).str.strip().str.lower()
+                        == "centros y asistidos"
+                    ) if col_ca in df_tiv.columns else None
+
+                    valor_existe = ca_mask is not None and ca_mask.any()
+                    if not valor_existe:
+                        valores = (
+                            tiv["CANAL_AGENTE_AGRUP"]
+                            .dropna()
+                            .astype(str)
+                            .str.strip()
+                            .unique()
+                            .tolist()
+                        )
+                        advertencias.append(
+                            "La columna 'CANAL_AGENTE_AGRUP' está presente en el TIV "
+                            "pero ningún valor coincide exactamente con 'Centros y Asistidos'.\n\n"
+                            f"Valores encontrados: {valores}\n\n"
+                            "Verifique que el archivo TIV contenga ese valor tal como está escrito."
+                        )
 
             df_repo = preparar_maestro_exportable(df_tiv, df_mae)
             self._q.put(("ok", (df_tiv, df_mae, df_repo, advertencias)))
         except (ValueError, KeyError) as exc:
             self._q.put(("error", str(exc)))
+        except FileNotFoundError as exc:
+            nombre = Path(exc.filename).name if exc.filename else str(exc)
+            self._q.put(("error",
+                f"No se encontró el archivo:\n  {nombre}\n\n"
+                "El archivo puede haber sido movido o eliminado.\n"
+                "Vuelva al Paso 1 y selecciónelo nuevamente."
+            ))
         except Exception as exc:
             import traceback
             self._q.put(("error", f"{exc}\n\n{traceback.format_exc()}"))
@@ -371,6 +394,8 @@ class Paso2Consumo(ctk.CTkFrame):
             self.after(150, self._revisar_cola)
             return
 
+        self._progress.stop()
+        self._progress.pack_forget()
         if msg == "ok":
             df_tiv, df_mae, df_repo, advertencias = data
             self._df_tiv     = df_tiv
@@ -381,7 +406,7 @@ class Paso2Consumo(ctk.CTkFrame):
                 self._poblar_tablas(df_tiv, df_mae)
                 self._mostrar_metricas(df_tiv, df_mae)
             except Exception as exc:
-                messagebox.showerror("Error mostrando resultados", str(exc))
+                mostrar_dialogo(self, "error", "Error mostrando resultados", str(exc))
             self._mostrar_zona("post")
             self._btn_calc.configure(state="normal",
                                      text="  CALCULAR CONSUMO  ")
@@ -391,9 +416,9 @@ class Paso2Consumo(ctk.CTkFrame):
         else:
             self._btn_calc.configure(state="normal",
                                      text="  CALCULAR CONSUMO  ")
-            self._lbl_status.configure(text=f"Error: {data[:120]}",
+            self._lbl_status.configure(text=f"Error: {data.splitlines()[0]}",
                                        text_color=ROJO)
-            messagebox.showerror("Error en el cálculo", data)
+            mostrar_dialogo(self, "error", "Error en el cálculo", data, copiable=True)
 
     # ── Mostrar resultados ────────────────────────────────────────────────────
 
@@ -641,9 +666,8 @@ class Paso2Consumo(ctk.CTkFrame):
         destino = self._destino_maestro()
         try:
             self._write_export_workbook(str(destino))
-            messagebox.showinfo(
-                "Exportado",
-                f"MaestroStock guardado en:\nMaestro_Consumo/{destino.name}",
-            )
+            mostrar_dialogo(self, "info", "Archivo exportado",
+                            f"MaestroStock guardado en:\nMaestro_Consumo/{destino.name}")
         except Exception as exc:
-            messagebox.showerror("Error al exportar", str(exc))
+            mostrar_dialogo(self, "error", "Error al exportar", str(exc))
+
