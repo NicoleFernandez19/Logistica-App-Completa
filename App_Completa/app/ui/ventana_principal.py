@@ -8,7 +8,7 @@ from .componentes import IndicadorPasos, TablaWidget
 
 _PASOS = ["Archivos", "Consumo", "Reposicion", "Pedidos"]
 _N_CONSUMO     = 11  # archivos requeridos en paso 1
-_N_REPOSICION  = 5   # maestro actual + 3 historicos + agentes
+_N_REPOSICION  = 4   # maestro actual + 3 historicos (agentes es opcional)
 
 
 class VentanaPrincipal(ctk.CTk):
@@ -220,7 +220,7 @@ class VentanaPrincipal(ctk.CTk):
 
         elif n == 2:
             loaded = len(self._p3.get_paths())
-            if loaded == _N_REPOSICION:
+            if loaded >= _N_REPOSICION:
                 self._btn_sig.configure(
                     state="normal", fg_color=AMARILLO,
                     text_color="#FFFFFF", text="Calcular Pedidos →")
@@ -260,4 +260,3 @@ class VentanaPrincipal(ctk.CTk):
     def _on_archivos_repo_change(self, n_loaded):
         if self._paso_actual == 2:
             self._actualizar_nav()
-

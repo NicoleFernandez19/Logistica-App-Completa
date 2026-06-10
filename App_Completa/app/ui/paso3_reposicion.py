@@ -375,7 +375,7 @@ class Paso3Reposicion(ctk.CTkFrame):
             text=f"archivos requeridos: {n_req} / {total_req}",
             text_color=VERDE if n_req == total_req else GRIS_TEXTO,
         )
-        self._on_change(n)
+        self._on_change(n_req)
 
     def _set_path(self, key, path, auto=False):
         self._paths[key] = path
