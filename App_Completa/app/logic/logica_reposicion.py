@@ -47,9 +47,7 @@ def validar_entradas(rutas_consumos, ruta_agentes):
     errores = []
     for key, path in rutas_consumos.items():
         if not path or not os.path.exists(path):
-            errores.append(f"'{key}': {path or '(no seleccionado)'}")
-    if not ruta_agentes or not os.path.exists(ruta_agentes):
-        errores.append(f"'agentes': {ruta_agentes or '(no seleccionado)'}")
+            errores.append(f"Falta el archivo de consumo: {key}")
     if errores:
         return False, "Archivos no encontrados:\n" + "\n".join(errores)
     return True, "OK"
@@ -91,26 +89,23 @@ def ejecutar_proceso_reposicion(
             if "ID P.F" not in df_hist.columns:
                 nombre = Path(rutas_consumos[key]).name
                 raise ValueError(
-                    f"Archivo histórico '{nombre}': columna 'ID P.F' no encontrada.\n"
-                    f"Columnas disponibles: {list(df_hist.columns[:20])}"
+                    f"No se encontró la columna 'ID P.F' en el archivo '{nombre}'.\n\n"
+                    "Sugerencia: Verifique que el archivo sea un MaestroStock válido exportado por la app."
                 )
 
-        print("Paso 2/8: Leyendo archivo de agentes...")
-        df_agentes = _leer_archivo(ruta_agentes)
-        if df_agentes.empty or len(df_agentes.columns) == 0:
-            raise ValueError(f"El archivo de agentes está vacío: '{Path(ruta_agentes).name}'")
-        col_ag = next(
-            (c for c in ["ID P.F", "ID_PF"] if c in df_agentes.columns),
-            None,
-        )
-        if col_ag is None:
-            raise ValueError(
-                f"Archivo de agentes '{Path(ruta_agentes).name}': columna de ID no encontrada.\n"
-                f"Columnas disponibles: {list(df_agentes.columns[:20])}"
-            )
-        lista_agentes_ajuste = (
-            df_agentes[col_ag].astype(str).str.strip().str.replace("-", "", regex=False).unique().tolist()
-        )
+        print("Paso 2/8: Procesando archivo de agentes canal propio...")
+        lista_agentes_ajuste = []
+        if ruta_agentes and os.path.exists(ruta_agentes):
+            df_agentes = _leer_archivo(ruta_agentes)
+            col_ag = next((c for c in ["ID P.F", "ID_PF"] if c in df_agentes.columns), None)
+            if col_ag:
+                lista_agentes_ajuste = (
+                    df_agentes[col_ag].astype(str).str.strip().str.replace("-", "", regex=False).unique().tolist()
+                )
+            else:
+                print("  ADVERTENCIA: El archivo de agentes no tiene la columna 'ID P.F'. Se ignorará el ajuste del 18%.")
+        else:
+            print("  INFO: No se proporcionó archivo de agentes canal. No se aplicará el ajuste del 18% a ningún agente.")
 
         print("Paso 3/8: Unificando datos...")
         # Normalizar el maestro actual
@@ -308,11 +303,11 @@ def ejecutar_proceso_reposicion(
         return True, "Proceso completado exitosamente.", df_detallado, df_final
 
     except FileNotFoundError as e:
-        msg = f"Archivo no encontrado:\n{e}"
+        msg = f"Error: No se pudo encontrar uno de los archivos requeridos.\n\nDetalle: {e}\n\nSugerencia: Verifique que los archivos no hayan sido movidos o renombrados."
         print(msg)
         return False, msg, None, None
     except KeyError as e:
-        msg = f"Columna no encontrada: {e}\n\nVerifique que los archivos tengan el formato correcto."
+        msg = f"Error: Falta la columna {e} en uno de los archivos.\n\nSugerencia: Asegúrese de estar utilizando los archivos Excel correctos y que las cabeceras no hayan sido modificadas."
         print(msg)
         return False, msg, None, None
     except Exception as e:
