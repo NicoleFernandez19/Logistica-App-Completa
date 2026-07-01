@@ -359,13 +359,17 @@ class Paso3Reposicion(ctk.CTkFrame):
     def _actualizar_status(self):
         if not hasattr(self, "_lbl_detect"):
             return
-        n = self._ready_count()
-        total = len(_ARCHIVOS_REPO)
+        paths = self.get_paths()
+        # Contamos solo los archivos requeridos (los 4 primeros)
+        requeridos = [k for k, _, _ in _ARCHIVOS_REPO if k != "agentes"]
+        n_req = sum(1 for k in requeridos if k in paths)
+        total_req = len(requeridos)
+        
         self._lbl_detect.configure(
-            text=f"archivos: {n} / {total}",
-            text_color=VERDE if n == total else GRIS_TEXTO,
+            text=f"archivos requeridos: {n_req} / {total_req}",
+            text_color=VERDE if n_req == total_req else GRIS_TEXTO,
         )
-        self._on_change(n)
+        self._on_change(n_req)
 
     def _set_path(self, key, path, auto=False):
         self._paths[key] = path
@@ -703,4 +707,3 @@ class ProductDialog(ctk.CTkToplevel):
 
         self.result = result
         self.destroy()
-

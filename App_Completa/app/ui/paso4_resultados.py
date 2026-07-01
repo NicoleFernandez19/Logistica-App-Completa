@@ -354,12 +354,11 @@ class Paso4Resultados(ctk.CTkFrame):
                 "consumo_mes_1": "Consumo M-3",
                 "consumo_mes_2": "Consumo M-2",
                 "consumo_mes_3": "Consumo M-1",
-                "agentes":       "Agentes Canal Propio",
             }
             faltantes = [lbl for k, lbl in _requeridos.items() if k not in paths]
             if faltantes:
                 raise ValueError(
-                    "Archivos faltantes para calcular la reposición:\n"
+                    "No se puede calcular la reposición porque faltan archivos históricos:\n"
                     + "\n".join(f"  • {lbl}" for lbl in faltantes)
                 )
             _nombres = {
@@ -378,24 +377,23 @@ class Paso4Resultados(ctk.CTkFrame):
             if no_existen:
                 detalle = "\n".join(f"  - {lbl}: {nombre}" for lbl, nombre in no_existen)
                 raise ValueError(
-                    "Los archivos seleccionados ya no estan disponibles en Data/.\n\n"
-                    "Si este paso ya se calculo correctamente, la aplicacion los movio a Data_OLD/ "
-                    "para evitar reprocesarlos por error.\n\n"
-                    "Para volver a calcular, cargue un nuevo juego de archivos en el Paso 3.\n\n"
-                    f"Archivos no encontrados:\n{detalle}"
+                    "Uno o más archivos seleccionados ya no se encuentran en la carpeta de trabajo.\n\n"
+                    "Sugerencia: Si ya realizó un cálculo previo, los archivos podrían estar en 'Data_OLD'. "
+                    "Vuelva al Paso 3 para cargar los archivos actuales.\n\n"
+                    f"Detalle de archivos faltantes:\n{detalle}"
                 )
 
             maestro = self._get_maestro()
             if maestro is None:
                 raise ValueError(
-                    "No hay Maestro Stock disponible.\n"
-                    "Complete el Paso 2 o seleccione un archivo en Paso 3 → Maestro Stock Actual."
+                    "Falta el Maestro Stock Actual.\n\n"
+                    "Sugerencia: Debe completar el Paso 2 satisfactoriamente o cargar un Maestro Stock manualmente en la pestaña 'Archivos' del Paso 3."
                 )
 
             rutas_consumos = {
                 k: paths[k] for k in ("consumo_mes_1", "consumo_mes_2", "consumo_mes_3")
             }
-            ruta_agentes = paths["agentes"]
+            ruta_agentes = paths.get("agentes")
 
             ok, msg, df_det, df_fin = ejecutar_proceso_reposicion(
                 df_maestro_actual=maestro,
@@ -603,4 +601,3 @@ class Paso4Resultados(ctk.CTkFrame):
                             f"Detallado guardado en:\n{path}")
         except Exception as exc:
             mostrar_dialogo(self, "error", "Error al exportar", str(exc))
-
