@@ -1,8 +1,16 @@
+MESES_NOMBRE = {
+    1: "ENERO", 2: "FEBRERO", 3: "MARZO", 4: "ABRIL", 5: "MAYO", 6: "JUNIO",
+    7: "JULIO", 8: "AGOSTO", 9: "SEPTIEMBRE", 10: "OCTUBRE", 11: "NOVIEMBRE", 12: "DICIEMBRE",
+}
+MESES_A_NUMERO = {nombre.lower(): numero for numero, nombre in MESES_NOMBRE.items()}
+MESES_A_NUMERO["setiembre"] = 9  # variante ortografica usada en algunos nombres de archivo
+
 PARAMETROS = {
     "factor_ajuste_rollos": 1.1,
     "redondeo_rollos": 0.3,
     "redondeo_rollos_prisma": 0.2,
     "redondeo_rollos_sube": 0.3,
+    "redondeo_resma": 0.3,
     "ajuste_canal_propio": 0.82,
 }
 
@@ -63,6 +71,17 @@ PRODUCTOS = [
         "param_redondeo": "redondeo_rollos_sube",
         "sku_base": 9001214102,
         "desc_base": "ROLLO TERMICOS SUBE x 5 unid",
+    },
+    {
+        # SKU y descripcion son placeholder: reemplazar por los reales del catalogo WU.
+        "nombre_base": "RESMA",
+        "col_repo": "RESMA REPO",
+        "col_stock_reseteo": "RESETEO RESMA",
+        "metodo": "regresion",
+        "factor_ajuste": None,
+        "param_redondeo": "redondeo_resma",
+        "sku_base": 9001000000,
+        "desc_base": "RESMA A4",
     },
 ]
 

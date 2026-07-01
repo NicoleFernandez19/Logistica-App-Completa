@@ -8,6 +8,8 @@ import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
                       GRIS_TEXTO, GRIS_BORDE, VERDE, INFO_BG,
                       APPLE_FILL, APPLE_HOVER, APPLE_SELECTED)
+from .componentes import esta_en_carpeta
+from ..config import MESES_A_NUMERO as _MESES_P1
 
 _ARCHIVOS = [
     ("tiv",          "TIV",             "Transacciones del mes por agente"),
@@ -39,13 +41,6 @@ _AUTO_NOMBRES = {
     "fajas":        ["fajas"],
 }
 _EXTS = {".csv", ".xlsx", ".xls"}
-_MESES_P1 = {
-    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
-    "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
-    "septiembre": 9, "setiembre": 9, "octubre": 10,
-    "noviembre": 11, "diciembre": 12,
-}
-
 _LIBRO_STEM = "01_datos_v5"  # prefijo del archivo libro a auto-detectar
 
 _TAB_LIBRO    = "  📋 Carga desde libro XLSX  "
@@ -271,7 +266,9 @@ class Paso1Carga(ctk.CTkFrame):
         self._actualizar_counter()
 
     def archivar_libro(self):
-        """Mueve el libro a Data_old/ después de que el cálculo fue exitoso."""
+        """Mueve el libro a Data_old/ después de que el cálculo fue exitoso.
+        Solo archiva si el libro está dentro de Data/ (la app no debe tocar
+        archivos seleccionados desde una carpeta externa del usuario)."""
         path = getattr(self, "_libro_pendiente_archivar", None)
         if not path:
             return
@@ -280,6 +277,10 @@ class Paso1Carga(ctk.CTkFrame):
             self._libro_pendiente_archivar = None
             return
         base = Path(sys.argv[0]).resolve().parent
+        data_dir = base / "Data"
+        if not esta_en_carpeta(p, data_dir):
+            self._libro_pendiente_archivar = None
+            return
         data_old = base / "Data_old"
         data_old.mkdir(exist_ok=True)
         destino = data_old / p.name

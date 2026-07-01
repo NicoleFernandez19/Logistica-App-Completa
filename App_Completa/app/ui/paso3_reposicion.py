@@ -11,7 +11,7 @@ from .componentes import TablaWidget, mostrar_dialogo, confirmar
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
                       GRIS_TEXTO, GRIS_BORDE, VERDE, INFO_BG, INFO_BORDE,
                       APPLE_FILL, APPLE_HOVER, APPLE_SELECTED)
-from ..config import PARAMETROS, PRODUCTOS
+from ..config import PARAMETROS, PRODUCTOS, MESES_A_NUMERO as _MESES
 from ..logic.cargador import cargar_consumo_mes
 
 
@@ -25,12 +25,6 @@ _ARCHIVOS_REPO = [
 ]
 
 _EXTS = {".csv", ".xlsx", ".xls"}
-_MESES = {
-    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
-    "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
-    "septiembre": 9, "setiembre": 9, "octubre": 10,
-    "noviembre": 11, "diciembre": 12,
-}
 
 _PRODUCT_COLS = ["Base", "Repo", "Método", "SKU", "Descripción"]
 
@@ -272,10 +266,10 @@ class Paso3Reposicion(ctk.CTkFrame):
         grid.grid(row=row, column=0, sticky="ew", padx=8, pady=8)
 
         params_def = [
-            ("factor_ajuste_rollos", "Factor ajuste rollos", "Multiplicador sobre el consumo historico de rollos"),
             ("redondeo_rollos", "Redondeo rollos", "Umbral de fraccion para redondear hacia arriba o abajo"),
             ("redondeo_rollos_prisma", "Redondeo Prisma", "Umbral de fraccion para redondear Prisma"),
             ("redondeo_rollos_sube", "Redondeo SUBE", "Umbral de fraccion para redondear SUBE"),
+            ("redondeo_resma", "Redondeo Resma", "Umbral de fraccion para redondear Resma"),
             ("ajuste_canal_propio", "Ajuste Canal Propio", "Factor de reduccion para agentes Canal Propio"),
         ]
 

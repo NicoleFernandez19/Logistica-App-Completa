@@ -1,4 +1,5 @@
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
 import customtkinter as ctk
 from .estilos import (AMARILLO, NEGRO, BLANCO, GRIS_BG, GRIS_BORDE,
@@ -347,3 +348,13 @@ def confirmar(parent, titulo, mensaje,
     win.after(80, lambda: _centrar(win, parent))
     parent.wait_window(win)
     return resultado[0]
+
+
+def esta_en_carpeta(path, carpeta):
+    """True si `path` esta contenido dentro de `carpeta`. La app nunca debe
+    mover/archivar archivos que el usuario selecciono desde una ubicacion externa."""
+    try:
+        Path(path).relative_to(carpeta)
+        return True
+    except ValueError:
+        return False

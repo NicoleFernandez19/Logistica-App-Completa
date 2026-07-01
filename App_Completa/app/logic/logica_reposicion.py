@@ -133,7 +133,7 @@ def ejecutar_proceso_reposicion(
         # Columnas del maestro para el merge
         cols_stock = [
             c for c in ["ID P.F", "PROV", "DEP", "SEGMENTO", "SUBSEGMENTACION",
-                        "STOCK ROLLO", "STOCK SUBE", "STOCK PRISMA",
+                        "STOCK ROLLO", "STOCK SUBE", "STOCK PRISMA", "STOCK RESMA",
                         "NOMBRE FANTASIA", "TIPO"]
             if c in df_maestro.columns
         ]
@@ -178,6 +178,7 @@ def ejecutar_proceso_reposicion(
             ("STOCK ROLLO",  "ROLLO_m3"),
             ("STOCK PRISMA", "ROLLO PRISMA_m3"),
             ("STOCK SUBE",   "ROLLO SUBE_m3"),
+            ("STOCK RESMA",  "RESMA_m3"),
         ]:
             if stock_col in df_union.columns and consumo_col in df_union.columns:
                 df_union[stock_col] = df_union[stock_col] - df_union[consumo_col]
@@ -186,6 +187,7 @@ def ejecutar_proceso_reposicion(
             ("RESETEO ROLLO",  "STOCK ROLLO"),
             ("RESETEO PRISMA", "STOCK PRISMA"),
             ("RESETEO SUBE",   "STOCK SUBE"),
+            ("RESETEO RESMA",  "STOCK RESMA"),
         ]:
             if stock_col in df_union.columns:
                 df_union[reseteo] = np.where(df_union[stock_col] < 0, 0, df_union[stock_col])

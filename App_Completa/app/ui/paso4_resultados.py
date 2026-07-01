@@ -8,7 +8,7 @@ from tkinter import filedialog
 import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
                       GRIS_TEXTO, GRIS_BORDE, ROJO, APPLE_FILL, APPLE_HOVER)
-from .componentes import TablaWidget, PanelMetrica, mostrar_dialogo
+from .componentes import TablaWidget, PanelMetrica, mostrar_dialogo, esta_en_carpeta
 from ..config import REGLAS, AGENTES_A_EXCLUIR
 
 _COLS_FINAL = ["ID P.F", "NOMBRE FANTASIA", "SKU", "DESCRIPCION", "CANTIDAD", "SEGMENTO"]
@@ -505,9 +505,7 @@ class Paso4Resultados(ctk.CTkFrame):
             if not path_str or path_str == "__GENERADO_PASO_2__":
                 continue
             p = Path(path_str)
-            try:
-                p.relative_to(data_dir)
-            except ValueError:
+            if not esta_en_carpeta(p, data_dir):
                 continue  # no esta en Data/
             if not p.exists():
                 continue

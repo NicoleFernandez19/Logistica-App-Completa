@@ -263,6 +263,7 @@ def cargar_fajas(path):
     _validar(df, ["ID_PF", "QX FAJAS"], path)
     df["ID_PF"] = _strip_id(df["ID_PF"])
     _num(df, ["QX FAJAS"])
+    df = df.groupby("ID_PF", as_index=False)["QX FAJAS"].sum()
     df["FAJAS"] = df["QX FAJAS"].apply(lambda x: math.ceil(x / 200) if x > 0 else 0)
     return df
 

@@ -11,6 +11,9 @@ from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
                       GRIS_TEXTO, VERDE, VERDE_BG, ROJO, INFO_BG, GRIS_BORDE,
                       APPLE_FILL, APPLE_HOVER, APPLE_SELECTED)
 from .componentes import TablaWidget, PanelMetrica, mostrar_dialogo
+from ..config import MESES_NOMBRE as _MESES_NOMBRE
+
+_MESES_NUMERO = {v: k for k, v in _MESES_NOMBRE.items()}
 
 _METRICAS = [
     ("CONSUMO\nROLLOS",   "consumo_rollo"),
@@ -57,6 +60,24 @@ class Paso2Consumo(ctk.CTkFrame):
             font=("Segoe UI", 11), text_color=GRIS_TEXTO,
             wraplength=540,
         ).pack(pady=(0, 14), padx=48)
+
+        mes_frame = ctk.CTkFrame(self._zona_pre, fg_color="transparent")
+        mes_frame.pack(pady=(0, 14))
+        ctk.CTkLabel(mes_frame, text="Mes de la repo:",
+                     font=("Segoe UI", 12), text_color=NEGRO).pack(side="left", padx=(0, 8))
+        # Por defecto el mes anterior: el consumo que se calcula siempre es el del
+        # mes recien cerrado, no el mes calendario en curso.
+        now = datetime.now()
+        mes_default = now.month - 1 or 12
+        anio_default = now.year if now.month > 1 else now.year - 1
+        self._var_mes_repo = tk.StringVar(value=_MESES_NOMBRE[mes_default])
+        ctk.CTkOptionMenu(mes_frame, variable=self._var_mes_repo, values=list(_MESES_NOMBRE.values()),
+                          fg_color=GRIS_BG, button_color=GRIS_BG,
+                          button_hover_color=APPLE_HOVER, text_color=NEGRO,
+                          width=150, height=32, font=("Segoe UI", 12)).pack(side="left", padx=(0, 8))
+        self._var_anio_repo = tk.StringVar(value=str(anio_default))
+        ctk.CTkEntry(mes_frame, textvariable=self._var_anio_repo,
+                     width=70, height=32, font=("Segoe UI", 12)).pack(side="left")
 
         self._btn_calc = ctk.CTkButton(
             self._zona_pre, text="  CALCULAR CONSUMO  ",
@@ -105,6 +126,13 @@ class Paso2Consumo(ctk.CTkFrame):
                       text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
                       width=220, height=40, corner_radius=6,
                       command=self._exportar).pack(side="right", padx=8)
+
+        ctk.CTkButton(bar, text="↓  Descargar Consumo",
+                      fg_color="transparent", text_color=NEGRO,
+                      hover_color=APPLE_HOVER, border_width=1, border_color=GRIS_BORDE,
+                      font=("Segoe UI", 11),
+                      width=180, height=40, corner_radius=6,
+                      command=self._exportar_consumo).pack(side="right", padx=8)
 
         # Métricas
         met = ctk.CTkFrame(self._zona_post, fg_color="transparent",
@@ -583,9 +611,8 @@ class Paso2Consumo(ctk.CTkFrame):
 
     # ── Exportar ──────────────────────────────────────────────────────────────
 
-    def _write_export_workbook(self, path):
-        t, m = self._df_tiv, self._df_maestro
-
+    def _construir_consumo_df(self):
+        t = self._df_tiv
         consumo_cols = ["ID_PF", "FLAG_DSP_KYC", "TIPO_AGENTE", "NOMBRE_FANTASIA",
                         "ROLLOS", "BOLSAS_RECOLECCION", "ROLLO_SUBE", "ROLLO_PRISMA",
                         "RESMA", "FAJAS"]
@@ -596,6 +623,12 @@ class Paso2Consumo(ctk.CTkFrame):
             "ROLLOS": "ROLLO", "BOLSAS_RECOLECCION": "BOLSA RECOLECCION",
             "ROLLO_SUBE": "ROLLO SUBE", "ROLLO_PRISMA": "ROLLO PRISMA",
         })
+        return consumo
+
+    def _write_export_workbook(self, path):
+        t, m = self._df_tiv, self._df_maestro
+
+        consumo = self._construir_consumo_df()
 
         stock_cols = ["ID_PF", "NOMBRE_FANTASIA", "PROV", "DEP",
                       "SEGMENTO", "SUBSEGMENTACION",
@@ -629,12 +662,20 @@ class Paso2Consumo(ctk.CTkFrame):
             sin_tiv.to_excel(writer, sheet_name="Sin TIV",         index=False)
             sin_mae.to_excel(writer, sheet_name="Sin Maestro",     index=False)
 
-    @staticmethod
-    def _destino_maestro():
-        _MESES = {1:"ENERO",2:"FEBRERO",3:"MARZO",4:"ABRIL",5:"MAYO",6:"JUNIO",
-                  7:"JULIO",8:"AGOSTO",9:"SEPTIEMBRE",10:"OCTUBRE",11:"NOVIEMBRE",12:"DICIEMBRE"}
-        now = datetime.now()
-        nombre = f"MAESTRO_CONSUMO_ENVIO_{_MESES[now.month]}_{now.year}.xlsx"
+    def _destino_maestro(self):
+        """Nombra el archivo con el mes SIGUIENTE al mes de la repo elegido en el selector,
+        ya que este MaestroStock es el stock de partida para la repo del mes que viene."""
+        mes_repo = _MESES_NUMERO.get(self._var_mes_repo.get(), datetime.now().month)
+        try:
+            anio_repo = int(self._var_anio_repo.get())
+        except ValueError:
+            anio_repo = datetime.now().year
+        mes_siguiente = mes_repo + 1
+        anio_siguiente = anio_repo
+        if mes_siguiente > 12:
+            mes_siguiente = 1
+            anio_siguiente += 1
+        nombre = f"MAESTRO_CONSUMO_ENVIO_{_MESES_NOMBRE[mes_siguiente]}_{anio_siguiente}.xlsx"
         carpeta = Path(sys.argv[0]).resolve().parent / "Maestro_Consumo"
         carpeta.mkdir(exist_ok=True)
         return carpeta / nombre
@@ -663,15 +704,39 @@ class Paso2Consumo(ctk.CTkFrame):
                 text_color=ROJO,
             )
 
+    def _ejecutar_exportacion(self, accion, mensaje_ok):
+        """Corre `accion` (que escribe el archivo) y muestra el resultado en un dialogo."""
+        try:
+            accion()
+            mostrar_dialogo(self, "info", "Archivo exportado", mensaje_ok)
+        except Exception as exc:
+            mostrar_dialogo(self, "error", "Error al exportar", str(exc))
+
     def _exportar(self):
         """Botón manual: sobreescribe sin preguntar y muestra confirmación."""
         if self._df_tiv is None:
             return
         destino = self._destino_maestro()
-        try:
-            self._write_export_workbook(str(destino))
-            mostrar_dialogo(self, "info", "Archivo exportado",
-                            f"MaestroStock guardado en:\nMaestro_Consumo/{destino.name}")
-        except Exception as exc:
-            mostrar_dialogo(self, "error", "Error al exportar", str(exc))
+        self._ejecutar_exportacion(
+            lambda: self._write_export_workbook(str(destino)),
+            f"MaestroStock guardado en:\nMaestro_Consumo/{destino.name}",
+        )
+
+    def _exportar_consumo(self):
+        """Descarga únicamente la tabla de Consumo Mensual, en un archivo aparte."""
+        if self._df_tiv is None:
+            return
+        now = datetime.now()
+        path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx")],
+            title="Guardar Consumo Mensual",
+            initialfile=f"CONSUMO_MENSUAL_{now.strftime('%Y%m')}.xlsx",
+        )
+        if not path:
+            return
+        self._ejecutar_exportacion(
+            lambda: self._construir_consumo_df().to_excel(path, sheet_name="Consumo Mensual", index=False),
+            f"Consumo mensual guardado en:\n{path}",
+        )
 

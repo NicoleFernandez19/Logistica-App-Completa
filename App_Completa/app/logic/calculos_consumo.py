@@ -120,6 +120,11 @@ def calcular(tiv, maestro, fac_termicas, prisma_env, sube_env, trx_sube,
     df.loc[m0_r, "RESMA"] = (IB[m0_r] * 3   + OB[m0_r] * 5 + QCASH[m0_r]) / 500
     df.loc[m1_r, "RESMA"] = (IB[m1_r] * 1.5 + OB[m1_r] * 5 + QCASH[m1_r]) / 500
 
+    # El repo convencional (Power BI/Excel) redondea estos valores a 3 decimales;
+    # sin este redondeo aparece una variacion minima acumulada frente a la app.
+    for _c in ["ROLLOS", "ROLLO_PRISMA", "ROLLO_SUBE", "BOLSAS_RECOLECCION", "RESMA"]:
+        df[_c] = df[_c].round(3)
+
     # FAJAS: viene directo del archivo externo (Qx FAJAS / 200, redondeo al alza)
     if fajas is not None and len(fajas) > 0:
         df = df.merge(fajas[["ID_PF", "FAJAS"]], on="ID_PF", how="left")
