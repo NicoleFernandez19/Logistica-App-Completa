@@ -43,7 +43,6 @@ def color_actual(color):
 
 def set_modo_apariencia(modo):
     ctk.set_appearance_mode(modo)
-    aplicar_estilo_tabla(ttk.Style())
 
 
 def aplicar_estilo_tabla(style: ttk.Style):
