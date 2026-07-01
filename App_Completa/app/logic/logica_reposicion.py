@@ -150,12 +150,8 @@ def ejecutar_proceso_reposicion(
                 .apply(pd.to_numeric, errors="coerce")
                 .fillna(0)
             )
-        # SUBSEGMENTACION se usa como multiplicador; si quedó en 0 (celda vacía),
-        # usar 1 como valor neutro para no anular todas las reposiciones
-        if "SUBSEGMENTACION" in df_union.columns:
-            df_union["SUBSEGMENTACION"] = df_union["SUBSEGMENTACION"].where(
-                df_union["SUBSEGMENTACION"] != 0, 1
-            )
+        # SUBSEGMENTACION se usa como multiplicador. Igual que el proceso anterior,
+        # si quedo en 0 (celda vacia) se mantiene en 0, anulando la reposicion del agente.
         # Para agentes presentes en el historial pero ausentes del maestro actual,
         # recuperar SEGMENTO desde el archivo histórico más reciente disponible.
         if "SEGMENTO" in df_union.columns:
@@ -230,6 +226,18 @@ def ejecutar_proceso_reposicion(
                 df_union[col_repo] = _redondear_con_parametro(df_union[col_repo], param_r)
 
         print("Paso 7/8: Aplicando reglas de negocio...")
+        # Regla historica: no enviar resma a ciertos tipos de agente
+        # (TIPO 2=Centros y Servicios, 3=Comprobante Txs Int., 4=Factura Termica,
+        #  5=Fac Termica + Comp. Txs Int. + DSP).
+        if "TIPO" in df_union.columns:
+            _col_repo_resma = next(
+                (p["col_repo"] for p in productos if p.get("nombre_base") == "RESMA"),
+                None,
+            )
+            if _col_repo_resma and _col_repo_resma in df_union.columns:
+                df_union.loc[
+                    df_union["TIPO"].isin([2, 3, 4, 5]), _col_repo_resma
+                ] = 0
         df_detallado = df_union.copy()
 
         print("Paso 8/8: Generando archivo final...")
@@ -293,8 +301,10 @@ def ejecutar_proceso_reposicion(
             df_final = df_final[~df_final["ID P.F"].isin(agentes_excluir)]
 
         ajuste_cp = parametros_calculo.get("ajuste_canal_propio", 1.0)
+        # Canal Propio se identifica por el nombre de fantasia (Centros de Servicio "C.S."),
+        # igual que el proceso anterior. No depende de un archivo externo de agentes.
         filtro_cp = (
-            df_final["ID P.F"].isin(lista_agentes_ajuste)
+            df_final["NOMBRE FANTASIA"].str.contains("C.S.", na=False)
             & df_final["SKU"].isin(skus_canal_propio)
         )
         df_final.loc[filtro_cp, "CANTIDAD"] = df_final.loc[filtro_cp, "CANTIDAD"].apply(

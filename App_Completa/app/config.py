@@ -7,6 +7,7 @@ MESES_A_NUMERO["setiembre"] = 9  # variante ortografica usada en algunos nombres
 
 PARAMETROS = {
     "factor_ajuste_rollos": 1.1,
+    "factor_ajuste_fajas": 1.1,
     "redondeo_rollos": 0.3,
     "redondeo_rollos_prisma": 0.2,
     "redondeo_rollos_sube": 0.3,
@@ -73,15 +74,24 @@ PRODUCTOS = [
         "desc_base": "ROLLO TERMICOS SUBE x 5 unid",
     },
     {
-        # SKU y descripcion son placeholder: reemplazar por los reales del catalogo WU.
         "nombre_base": "RESMA",
         "col_repo": "RESMA REPO",
         "col_stock_reseteo": "RESETEO RESMA",
         "metodo": "regresion",
         "factor_ajuste": None,
         "param_redondeo": "redondeo_resma",
-        "sku_base": 9001000000,
-        "desc_base": "RESMA A4",
+        "sku_base": 9001218106,
+        "desc_base": "RESMA DE PAPEL BLANCO TAMAÑO CARTA",
+    },
+    {
+        "nombre_base": "FAJAS",
+        "col_repo": "FAJAS REPO",
+        "col_stock_reseteo": None,
+        "metodo": "promedio_ajustado_dep",
+        "factor_ajuste": "factor_ajuste_fajas",
+        "param_redondeo": None,
+        "sku_base": 9001214107,
+        "desc_base": "FAJAS DE BILLETES x 200 unid",
     },
 ]
 
