@@ -336,7 +336,7 @@ class Paso2Consumo(ctk.CTkFrame):
             ]
             if no_existen:
                 detalle = "\n".join(
-                    f"  • {lbl}: {Path(p).name}" for lbl, p in no_existen
+                    f"  • {lbl}: {_ruta_archivo(p)}" for lbl, p in no_existen
                 )
                 raise ValueError(
                     "Los siguientes archivos ya no se encuentran en su ubicación original.\n"
@@ -403,9 +403,9 @@ class Paso2Consumo(ctk.CTkFrame):
         except (ValueError, KeyError) as exc:
             self._q.put((run_id, "error", str(exc)))
         except FileNotFoundError as exc:
-            nombre = Path(exc.filename).name if exc.filename else str(exc)
+            ruta = exc.filename if exc.filename else str(exc)
             self._q.put((run_id, "error",
-                f"No se encontró el archivo:\n  {nombre}\n\n"
+                f"No se encontró el archivo:\n  {ruta}\n\n"
                 "El archivo puede haber sido movido o eliminado.\n"
                 "Vuelva al Paso 1 y selecciónelo nuevamente."
             ))

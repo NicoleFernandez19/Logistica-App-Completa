@@ -265,6 +265,7 @@ Al guardar el MaestroStock al final del Paso 2, si ya existe un archivo con el m
 | 9001219112 | BOLSA RECOLECCION x1 | promedio | — | — |
 | 9001223489 | ROLLO TERMICO DEBITO PRISMA x5 | regresion | — | 0.2 |
 | 9001214102 | ROLLO TERMICOS SUBE x5 | regresion | — | 0.3 |
+| 9001000000 | RESMA A4 (SKU/descripción placeholder, pendiente de reemplazar por el real) | regresion | — | 0.3 |
 
 ---
 
@@ -293,7 +294,7 @@ Columnas: `ID_PF`, `Qx FAJAS`. La columna `FAJAS` se calcula como `ceil(Qx FAJAS
 
 ### Maestros históricos (Paso 3)
 Deben tener el formato del MaestroStock exportado por Paso 2 con columna `ID P.F` (o `ID_PF`):
-`NOMBRE FANTASIA`, `PROV`, `DEP`, `SEGMENTO`, `SUBSEGMENTACION`, `STOCK ROLLO`, `STOCK SUBE`, `STOCK PRISMA`, `TIPO`, `ROLLO`, `BOLSA RECOLECCION`, `ROLLO SUBE`, `ROLLO PRISMA`, `RESMA`, `FAJAS`.
+`NOMBRE FANTASIA`, `PROV`, `DEP`, `SEGMENTO`, `SUBSEGMENTACION`, `STOCK ROLLO`, `STOCK SUBE`, `STOCK PRISMA`, `STOCK RESMA`, `TIPO`, `ROLLO`, `BOLSA RECOLECCION`, `ROLLO SUBE`, `ROLLO PRISMA`, `RESMA`, `FAJAS`.
 
 ### Agentes Canal Propio
 Columna requerida: `ID P.F` (o `ID_PF`). Solo se usa para identificar qué agentes reciben el ajuste del 18%.
@@ -356,13 +357,14 @@ Verificadas al inicio por `pre_app_check.py`. Si falta alguna, muestra instrucci
 
 | Parámetro | Default | Descripción |
 |---|---|---|
-| `factor_ajuste_rollos` | 1.1 | Multiplicador sobre consumo proyectado de rollos |
+| `factor_ajuste_rollos` | 1.1 | Multiplicador sobre consumo proyectado de rollos. **No editable desde la UI**: es parte fija del modelo de regresión, solo se cambia en `config.py`. |
 | `redondeo_rollos` | 0.3 | Umbral de fracción para redondear rollos |
 | `redondeo_rollos_prisma` | 0.2 | Umbral de fracción para redondear Prisma |
 | `redondeo_rollos_sube` | 0.3 | Umbral de fracción para redondear SUBE |
+| `redondeo_resma` | 0.3 | Umbral de fracción para redondear Resma |
 | `ajuste_canal_propio` | 0.82 | Factor de reducción para agentes Canal Propio |
 
-Los parámetros son editables en la UI (Paso 3, pestaña Parámetros) sin necesidad de modificar el código.
+El resto de los parámetros son editables en la UI (Paso 3, pestaña Parámetros) sin necesidad de modificar el código.
 
 ---
 

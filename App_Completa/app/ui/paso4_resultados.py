@@ -375,9 +375,9 @@ class Paso4Resultados(ctk.CTkFrame):
                 if not path_str or path_str == "__GENERADO_PASO_2__":
                     continue
                 if not Path(path_str).exists():
-                    no_existen.append((_nombres.get(key, key), Path(path_str).name))
+                    no_existen.append((_nombres.get(key, key), path_str))
             if no_existen:
-                detalle = "\n".join(f"  - {lbl}: {nombre}" for lbl, nombre in no_existen)
+                detalle = "\n".join(f"  - {lbl}: {ruta}" for lbl, ruta in no_existen)
                 raise ValueError(
                     "Uno o más archivos seleccionados ya no se encuentran en la carpeta de trabajo.\n\n"
                     "Sugerencia: Si ya realizó un cálculo previo, los archivos podrían estar en 'Data_OLD'. "
