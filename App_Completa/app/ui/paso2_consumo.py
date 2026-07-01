@@ -41,6 +41,7 @@ class Paso2Consumo(ctk.CTkFrame):
         self._df_tiv     = None
         self._df_maestro = None
         self._q          = q_module.Queue()
+        self._run_id     = 0
         self._build()
 
     # ── Build ─────────────────────────────────────────────────────────────────
@@ -296,10 +297,11 @@ class Paso2Consumo(ctk.CTkFrame):
         self._progress.start()
         self.update_idletasks()
         self._cola_intentos = 0
-        threading.Thread(target=self._hilo_calculo, daemon=True).start()
+        self._run_id += 1
+        threading.Thread(target=self._hilo_calculo, args=(self._run_id,), daemon=True).start()
         self.after(150, self._revisar_cola)
 
-    def _hilo_calculo(self):
+    def _hilo_calculo(self, run_id):
         try:
             from ..logic.cargador import (
                 cargar_tiv, cargar_maestro, cargar_fac_termicas,
@@ -397,23 +399,23 @@ class Paso2Consumo(ctk.CTkFrame):
                         )
 
             df_repo = preparar_maestro_exportable(df_tiv, df_mae)
-            self._q.put(("ok", (df_tiv, df_mae, df_repo, advertencias)))
+            self._q.put((run_id, "ok", (df_tiv, df_mae, df_repo, advertencias)))
         except (ValueError, KeyError) as exc:
-            self._q.put(("error", str(exc)))
+            self._q.put((run_id, "error", str(exc)))
         except FileNotFoundError as exc:
             nombre = Path(exc.filename).name if exc.filename else str(exc)
-            self._q.put(("error",
+            self._q.put((run_id, "error",
                 f"No se encontró el archivo:\n  {nombre}\n\n"
                 "El archivo puede haber sido movido o eliminado.\n"
                 "Vuelva al Paso 1 y selecciónelo nuevamente."
             ))
         except Exception as exc:
             import traceback
-            self._q.put(("error", f"{exc}\n\n{traceback.format_exc()}"))
+            self._q.put((run_id, "error", f"{exc}\n\n{traceback.format_exc()}"))
 
     def _revisar_cola(self):
         try:
-            msg, data = self._q.get_nowait()
+            run_id, msg, data = self._q.get_nowait()
         except q_module.Empty:
             self._cola_intentos += 1
             if self._cola_intentos > 2000:  # ~5 minutos a 150 ms por intento
@@ -424,6 +426,12 @@ class Paso2Consumo(ctk.CTkFrame):
                 )
                 return
             self.after(150, self._revisar_cola)
+            return
+
+        if run_id != self._run_id:
+            # Resultado de un calculo anterior ya abandonado por timeout; se descarta
+            # para que no pise el resultado del calculo actual.
+            self._revisar_cola()
             return
 
         self._progress.stop()

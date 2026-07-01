@@ -4,7 +4,7 @@ from .estilos import (configurar_tema, set_modo_apariencia,
                       BLANCO, GRIS_BG, GRIS_BORDE, GRIS_TEXTO,
                       APPLE_BAR, APPLE_HOVER, APPLE_FILL, APPLE_SELECTED,
                       WU_BLACK, WU_YELLOW)
-from .componentes import IndicadorPasos, TablaWidget
+from .componentes import IndicadorPasos, TablaWidget, mostrar_dialogo
 
 _PASOS = ["Archivos", "Consumo", "Reposicion", "Pedidos"]
 _N_CONSUMO     = 11  # archivos requeridos en paso 1
@@ -253,7 +253,14 @@ class VentanaPrincipal(ctk.CTk):
         self._df_maestro = df_maestro
         self._df_maestro_repo = df_maestro_repo
         # Mover el libro XLSX a Data_old ahora que el cálculo fue exitoso
-        self._p1.archivar_libro()
+        try:
+            self._p1.archivar_libro()
+        except Exception as exc:
+            mostrar_dialogo(
+                self, "advertencia", "No se pudo archivar el libro",
+                f"El consumo se calculó correctamente, pero el archivo de origen no se "
+                f"pudo mover a Data_old (¿está abierto en Excel?):\n\n{exc}",
+            )
         if self._paso_actual == 1:
             self._actualizar_nav()
 

@@ -28,6 +28,7 @@ class Paso4Resultados(ctk.CTkFrame):
         self._df_final    = None
         self._df_detallado = None
         self._q = q_module.Queue()
+        self._run_id = 0
         self._logs = []
         self._build()
 
@@ -327,11 +328,12 @@ class Paso4Resultados(ctk.CTkFrame):
         self._progress.pack(pady=(0, 16))
         self._progress.start()
         self._cola_intentos = 0
+        self._run_id += 1
 
-        threading.Thread(target=self._hilo_reposicion, daemon=True).start()
+        threading.Thread(target=self._hilo_reposicion, args=(self._run_id,), daemon=True).start()
         self.after(150, self._revisar_cola)
 
-    def _hilo_reposicion(self):
+    def _hilo_reposicion(self, run_id):
         from ..logic.logica_reposicion import ejecutar_proceso_reposicion
 
         class _Writer:
@@ -339,7 +341,7 @@ class Paso4Resultados(ctk.CTkFrame):
                 self._q = q
             def write(self, msg):
                 if msg.strip():
-                    self._q.put(("log", msg.rstrip()))
+                    self._q.put((run_id, "log", msg.rstrip()))
             def flush(self):
                 pass
 
@@ -404,18 +406,18 @@ class Paso4Resultados(ctk.CTkFrame):
                 reglas=REGLAS,
                 agentes_excluir=AGENTES_A_EXCLUIR,
             )
-            self._q.put(("done", (ok, msg, df_det, df_fin)))
+            self._q.put((run_id, "done", (ok, msg, df_det, df_fin)))
         except (ValueError, KeyError) as exc:
-            self._q.put(("done", (False, str(exc), None, None)))
+            self._q.put((run_id, "done", (False, str(exc), None, None)))
         except Exception as exc:
             import traceback
-            self._q.put(("done", (False, f"{exc}\n\n{traceback.format_exc()}", None, None)))
+            self._q.put((run_id, "done", (False, f"{exc}\n\n{traceback.format_exc()}", None, None)))
         finally:
             sys.stdout = old_out
 
     def _revisar_cola(self):
         try:
-            tag, data = self._q.get_nowait()
+            run_id, tag, data = self._q.get_nowait()
         except q_module.Empty:
             self._cola_intentos += 1
             if self._cola_intentos > 2000:  # ~5 minutos a 150 ms por intento
@@ -429,6 +431,12 @@ class Paso4Resultados(ctk.CTkFrame):
                 self._log_write("\n✗ Tiempo de espera agotado. Intente nuevamente.")
                 return
             self.after(150, self._revisar_cola)
+            return
+
+        if run_id != self._run_id:
+            # Mensaje de un calculo anterior ya abandonado por timeout; se descarta
+            # para que no pise el resultado ni el log del calculo actual.
+            self._revisar_cola()
             return
 
         if tag == "log":
@@ -546,8 +554,11 @@ class Paso4Resultados(ctk.CTkFrame):
         df = self._df_final if valor == "(Todos)" else self._df_final[
             self._df_final["DESCRIPCION"] == valor
         ]
-        self._cargar_tabla(df)
-        self._actualizar_kpis(df)
+        try:
+            self._cargar_tabla(df)
+            self._actualizar_kpis(df)
+        except Exception as exc:
+            mostrar_dialogo(self, "error", "Error al filtrar", str(exc))
 
     def _actualizar_kpis(self, df):
         if df is None or df.empty:
