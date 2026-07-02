@@ -249,7 +249,7 @@ class Paso1Carga(ctk.CTkFrame):
         if sin_asignar:
             r = (len(items) + 2) // 3
             ctk.CTkLabel(self._libro_preview,
-                         text="Sin asignar: " + ", ".join(sin_asignar),
+                         text="Hojas no utilizadas (no requieren acción): " + ", ".join(sin_asignar),
                          font=("Segoe UI", 9), text_color=GRIS_TEXTO).grid(
                 row=r, column=0, columnspan=3, padx=8, pady=(4, 2), sticky="w")
 

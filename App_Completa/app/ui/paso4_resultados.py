@@ -461,6 +461,7 @@ class Paso4Resultados(ctk.CTkFrame):
                 self._cb_prod.configure(
                     values=["(Todos)"] + [p.get("desc_base", "") for p in productos]
                 )
+                self._var_prod.set("(Todos)")
                 self._btn_exp_final.configure(state="normal")
                 self._btn_exp_det.configure(state="normal")
                 self._log_write(f"\n✓ {msg}")

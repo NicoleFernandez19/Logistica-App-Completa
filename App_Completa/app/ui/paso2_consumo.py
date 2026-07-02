@@ -494,9 +494,11 @@ class Paso2Consumo(ctk.CTkFrame):
             if "CANAL_AGENTE_AGRUP" in t.columns else []
         )
         self._cb_canal.configure(values=["(Todos)"] + self._canales)
+        self._var_canal.set("(Todos)")
         self._cargar_consumo(t)
 
         # Stock
+        self._var_negs.set(False)
         self._cargar_stock(m, solo_neg=False)
 
         # Reconciliación
@@ -721,13 +723,22 @@ class Paso2Consumo(ctk.CTkFrame):
             mostrar_dialogo(self, "error", "Error al exportar", str(exc))
 
     def _exportar(self):
-        """Botón manual: sobreescribe sin preguntar y muestra confirmación."""
+        """Botón manual: deja elegir carpeta y nombre de guardado."""
         if self._df_tiv is None:
             return
-        destino = self._destino_maestro()
+        sugerido = self._destino_maestro()
+        path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx")],
+            title="Guardar MaestroStock",
+            initialdir=str(sugerido.parent),
+            initialfile=sugerido.name,
+        )
+        if not path:
+            return
         self._ejecutar_exportacion(
-            lambda: self._write_export_workbook(str(destino)),
-            f"MaestroStock guardado en:\nMaestro_Consumo/{destino.name}",
+            lambda: self._write_export_workbook(path),
+            f"MaestroStock guardado en:\n{path}",
         )
 
     def _exportar_consumo(self):

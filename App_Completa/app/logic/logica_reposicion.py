@@ -5,6 +5,18 @@ import traceback
 from functools import reduce
 from pathlib import Path
 from .cargador import _leer as _leer_archivo
+from .cargador import _num as _numerizar
+
+_COLS_TEXTO_CRUDO = {"ID P.F", "NOMBRE FANTASIA", "PROV", "SEGMENTO"}
+
+
+def _normalizar_numericas(df):
+    """Convierte a numerico todas las columnas de un archivo recien leido,
+    respetando comas decimales (formato argentino) igual que el resto de la app.
+    Sin esto, un CSV con comas decimales (ej. "4,039") queda como texto y
+    pd.to_numeric() lo descarta en silencio, convirtiendo todo el archivo en 0."""
+    cols = [c for c in df.columns if c not in _COLS_TEXTO_CRUDO]
+    return _numerizar(df, cols)
 
 
 def _redondear_con_parametro(serie, parametro):
@@ -80,6 +92,7 @@ def ejecutar_proceso_reposicion(
                 df.rename(columns={"ID_PF": "ID P.F"}, inplace=True)
             if "ID P.F" in df.columns:
                 df["ID P.F"] = df["ID P.F"].astype(str).str.strip().str.replace("-", "", regex=False)
+            _normalizar_numericas(df)
 
         for key, df_hist in [
             ("consumo_mes_1", df_C1),
@@ -114,6 +127,7 @@ def ejecutar_proceso_reposicion(
             df_maestro.rename(columns={"ID_PF": "ID P.F"}, inplace=True)
         if "ID P.F" in df_maestro.columns:
             df_maestro["ID P.F"] = df_maestro["ID P.F"].astype(str).str.strip().str.replace("-", "", regex=False)
+        _normalizar_numericas(df_maestro)
 
         # Renombrar columnas de consumo histórico para evitar conflictos
         df_C1r = df_C1.rename(columns={c: f"{c}_m1" for c in df_C1.columns if c != "ID P.F"})

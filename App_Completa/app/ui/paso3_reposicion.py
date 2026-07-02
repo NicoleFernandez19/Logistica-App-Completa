@@ -638,11 +638,19 @@ class ProductDialog(ctk.CTkToplevel):
 
         body = ctk.CTkFrame(self, fg_color=BLANCO, corner_radius=8)
         body.pack(fill="both", expand=True, padx=14, pady=14)
-        body.columnconfigure(1, weight=1)
+
+        # Campos con scroll propio: en pantallas chicas la lista de campos no
+        # entra completa y sin esto quedaban tapados el resto de campos o los
+        # botones Guardar/Cancelar, sin forma de llegar a ellos.
+        scroll = ctk.CTkScrollableFrame(body, fg_color=BLANCO, corner_radius=0,
+                                        width=480,
+                                        height=min(420, 48 * len(self._FIELDS)))
+        scroll.pack(fill="both", expand=True, padx=0, pady=(0, 6))
+        scroll.columnconfigure(1, weight=1)
 
         data = product_data or {}
         for i, (key, label, widget_type) in enumerate(self._FIELDS):
-            ctk.CTkLabel(body, text=label, font=("Segoe UI", 11),
+            ctk.CTkLabel(scroll, text=label, font=("Segoe UI", 11),
                          text_color=NEGRO).grid(row=i, column=0, sticky="w",
                                                  padx=12, pady=6)
             var = tk.StringVar(value="" if data.get(key) is None else str(data.get(key, "")))
@@ -650,21 +658,31 @@ class ProductDialog(ctk.CTkToplevel):
             if isinstance(widget_type, list):
                 if not var.get():
                     var.set(widget_type[0])
-                widget = ctk.CTkOptionMenu(body, variable=var, values=widget_type,
+                widget = ctk.CTkOptionMenu(scroll, variable=var, values=widget_type,
                                            width=290, height=36,
                                            font=("Segoe UI", 11))
+                # El metodo de calculo es parte del modelo del producto: al editar uno
+                # ya existente se bloquea para evitar cambiarlo por error. Al agregar
+                # un producto nuevo (product_data=None) queda libre para elegir.
+                if key == "metodo" and product_data is not None:
+                    widget.configure(state="disabled")
             else:
-                widget = ctk.CTkEntry(body, textvariable=var, width=360, height=36,
+                widget = ctk.CTkEntry(scroll, textvariable=var, width=360, height=36,
                                       font=("Segoe UI", 11))
             widget.grid(row=i, column=1, sticky="ew", padx=12, pady=6)
+            if key == "metodo" and product_data is not None:
+                ctk.CTkLabel(scroll, text="No editable en productos existentes",
+                             font=("Segoe UI", 9), text_color=GRIS_TEXTO).grid(
+                    row=i, column=2, sticky="w", padx=(0, 12))
 
+        # Barra de acciones fija, fuera del area con scroll: siempre visible.
         actions = ctk.CTkFrame(body, fg_color="transparent")
-        actions.grid(row=len(self._FIELDS), column=0, columnspan=2, pady=(14, 8))
+        actions.pack(fill="x", pady=(6, 4))
         ctk.CTkButton(actions, text="Guardar",
                       fg_color=AMARILLO, hover_color=AMARILLO_DARK,
                       text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
                       width=125, height=38,
-                      command=self._save).pack(side="left", padx=6)
+                      command=self._save).pack(side="left", padx=(12, 6))
         ctk.CTkButton(actions, text="Cancelar",
                       fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
                       text_color=NEGRO, font=("Segoe UI", 11),
@@ -672,10 +690,12 @@ class ProductDialog(ctk.CTkToplevel):
                       command=self.destroy).pack(side="left", padx=6)
 
         self.update_idletasks()
-        w = self.winfo_reqwidth()
-        h = self.winfo_reqheight()
-        x = parent.winfo_rootx() + 120
-        y = parent.winfo_rooty() + 80
+        pantalla_w = self.winfo_screenwidth()
+        pantalla_h = self.winfo_screenheight()
+        w = min(self.winfo_reqwidth(), int(pantalla_w * 0.9))
+        h = min(self.winfo_reqheight(), int(pantalla_h * 0.85))
+        x = max(0, min(parent.winfo_rootx() + 120, pantalla_w - w))
+        y = max(0, min(parent.winfo_rooty() + 80, pantalla_h - h))
         self.geometry(f"{w}x{h}+{x}+{y}")
         self.deiconify()
         self.lift()
