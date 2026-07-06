@@ -46,13 +46,13 @@ Data_OLD/          ← Archivos procesados (se mueven automáticamente al finali
 3. **Reposición** — cargar el maestro actual + 3 meses históricos y ajustar parámetros/productos si hace falta.
 4. **Pedidos** — calcular la reposición y exportar `REPOSICION_FINAL.xlsx` (pedido) y `REPOSICION_DETALLADO.xlsx` (todas las columnas intermedias del cálculo).
 
-Documentación completa de la lógica de cálculo, reglas de negocio y formatos de archivo: [`docs/APP_REPOSICION.md`](../docs/APP_REPOSICION.md). Casos de prueba funcionales: [`docs/CASOS_DE_PRUEBA.md`](../docs/CASOS_DE_PRUEBA.md).
+Documentación completa de la lógica de cálculo, reglas de negocio y formatos de archivo: [`docs/APP_REPOSICION.md`](../docs/APP_REPOSICION.md). Casos de prueba funcionales: [`docs/CASOS_DE_PRUEBA.md`](../docs/CASOS_DE_PRUEBA.md). Comparación con el script anterior: [`docs/COMPARACION_LEGACY.md`](../docs/COMPARACION_LEGACY.md).
 
 ---
 
 ## Carpeta `backup/`
 
-Contiene la versión anterior de la app: un script suelto (`repo_con_segmento_para_eliminar_agentes_v9.2.py`) que hacía manualmente lo que hoy automatizan los Pasos 3 y 4. Se conserva como referencia histórica, no como fuente de verdad — ver ["Comparación con el script legacy"](../docs/APP_REPOSICION.md#comparación-con-el-script-legacy-backuprepo_con_segmento_para_eliminar_agentes_v92py) en la documentación completa para un caso concreto donde ese script dio resultados incorrectos por no normalizar el tipo de dato del ID de agente entre archivos.
+Contiene la versión anterior de la app: un script suelto (`repo_con_segmento_para_eliminar_agentes_v9.2.py`) que hacía manualmente lo que hoy automatizan los Pasos 3 y 4, y una copia corregida (`repo_con_segmento_para_eliminar_agentes_v9.2_CORREGIDO.py`). Se conserva como referencia histórica, no como fuente de verdad — ver [`docs/COMPARACION_LEGACY.md`](../docs/COMPARACION_LEGACY.md) para un caso concreto donde ese script dio resultados incorrectos por no normalizar el tipo de dato del ID de agente entre archivos, y por qué la app nueva es la referencia confiable.
 
 ---
 
