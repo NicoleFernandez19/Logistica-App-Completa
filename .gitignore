@@ -26,6 +26,9 @@ App_Completa/Maestro_Consumo/
 # Archivos temporales de Office
 ~$*
 
+# Archivos de scratch/analisis (pickles, temporales de investigacion)
+*.pkl
+
 # OS
 .DS_Store
 Thumbs.db
