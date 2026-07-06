@@ -25,10 +25,23 @@ from pandas import ExcelWriter
 CARPETA_ENTRADA = ''
 CARPETA_SALIDA = ''
 
+# Si se dejan vacias, usar la carpeta donde esta este script (no el directorio
+# desde el que se lo ejecuta). Sin esto, correr el script con doble clic o
+# desde una terminal abierta en otra carpeta busca los .xlsx en el lugar
+# equivocado y falla con FileNotFoundError dentro de pandas (get_handle).
+# Tampoco hay que hardcodear aca una ruta absoluta: si el script se copia a
+# otra PC (usuario/carpeta distintos), esa ruta fija no va a existir y va a
+# volver a fallar -- por eso se resuelve dinamicamente con __file__.
+_CARPETA_SCRIPT = os.path.dirname(os.path.abspath(__file__))
+if not CARPETA_ENTRADA:
+    CARPETA_ENTRADA = _CARPETA_SCRIPT
+if not CARPETA_SALIDA:
+    CARPETA_SALIDA = _CARPETA_SCRIPT
+
 NOMBRE_CONSUMO_MES_1 = 'CONSUMO_ABRIL_2026.xlsx'   # mes mas viejo
 NOMBRE_CONSUMO_MES_2 = 'CONSUMO_MAYO_2026.xlsx'    # mes intermedio
-NOMBRE_CONSUMO_MES_3 = 'CONSUMO_JUNIO_2026.xlsx'   # mes mas reciente
-NOMBRE_MAESTRO_STOCK = 'MAESTRO_CONSUMO_ENVIO_AGOSTO_2026.xlsx'
+NOMBRE_CONSUMO_MES_3 = 'CONSUMO_MENSUAL_202607.xlsx'   # mes mas reciente
+NOMBRE_MAESTRO_STOCK = 'MAESTRO_CONSUMO_ENVIO_SEPTIEMBRE_2026.xlsx'
 
 NOMBRE_SALIDA_DETALLADO = 'REPOSICION_DETALLADO_CORREGIDO.xlsx'
 NOMBRE_SALIDA_FINAL     = 'REPOSICION_CRUDO_FINAL_CORREGIDO.xlsx'
