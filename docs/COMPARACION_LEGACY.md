@@ -50,31 +50,23 @@ Podría pensarse que la solución es re-tipear los Excel de Abril/Mayo como text
 
 Verificado (2026-07-06): corriendo esta copia contra los mismos 4 archivos de `backup/`, el resultado pasó de estar 30-80% desviado por SKU (script original) a estar dentro de ~1% de la app nueva en todos los productos.
 
-## Universo de agentes: join `outer` (app nueva) vs. join `right` (script legacy)
+## Universo de agentes: mes más reciente como referencia
 
-Ese ~1% residual que queda incluso con el fix de `ID P.F` no es un bug — es una diferencia de diseño en cómo cada versión arma el historial de 3 meses:
+El script legacy corregido encadena los 3 meses con `pd.merge(..., how="right")`, siempre fijado al mes 3 (el más reciente). Si un agente no aparece en el archivo del mes 3, se cae del cálculo entero aunque tenga historial válido en los meses 1 y 2.
 
-- **Script legacy:** encadena los 3 meses con `pd.merge(..., how="right")`, siempre fijado al mes 3 (el más reciente). Si un agente no aparece en el archivo del mes 3, **se cae del cálculo entero**, aunque tenga historial válido en los meses 1 y 2.
-- **App nueva** (`logica_reposicion.py`): hace `pd.merge(..., how="outer")` entre los 3 meses. Un agente que falte en el archivo más reciente pero tenga historial en los otros dos **se mantiene** en el cálculo.
+La app nueva ahora replica ese criterio en `logica_reposicion.py`: une M-2 contra M-1 con `how="right"` y luego M-3 contra ese resultado también con `how="right"`. Esto evita diferencias residuales al comparar por `DESCRIPCION`/`CANTIDAD` contra `repo_con_segmento_para_eliminar_agentes_v9.2_CORREGIDO.py`.
 
-Con los archivos de `backup/`, esto afecta a 222 agentes (presentes en Abril/Mayo, ausentes en el archivo de Junio). Se investigó si convenía imitar el criterio del script legacy (descartarlos) y la respuesta es no, por dos motivos verificados con datos reales:
-
-1. **Los 222 siguen en el maestro actual (Septiembre) — ninguno se dio de baja.** Si un agente hubiera cerrado, el propio cálculo ya lo neutraliza solo: al no estar en el maestro más reciente, su `SUBSEGMENTACION` llega vacía → se rellena en 0 (no en 1, ver "SUBSEGMENTACION como multiplicador" en `APP_REPOSICION.md`) → reposición 0 en todos los productos para ese agente. Esto es automático, no depende de qué tipo de join se use para el historial.
-2. **El stock sobrante de un agente que no vendió ese mes ya se descuenta solo.** Si a un agente le falta el consumo del mes 3, ese valor se toma como 0 → no se le resta nada al `STOCK` → el `RESETEO` (stock disponible) sale alto → ese `RESETEO` se resta de la reposición calculada. En la práctica, de los 222 agentes "extra", la reposición de ROLLO promedio es 0,09 unidades (percentil 75 = 0) — el mecanismo de stock ya frena la sobre-reposición sin necesidad de excluir al agente.
-
-En los datos de `backup/`, los 222 agentes extra aportan en total 135 unidades sobre 26.179 (~0,5%) — no una cantidad inflada, sino el reflejo correcto de que la mayoría de ellos no necesita nada.
-
-**Conclusión:** mantener el join `outer` en la app nueva. Descartar agentes por faltar en un solo archivo mensual (como hace el script legacy) es el mismo tipo de pérdida silenciosa de datos que el bug de `ID P.F` — castiga a un agente activo por un hueco puntual en un export, no porque realmente no necesite reposición. Los controles de `SUBSEGMENTACION` (maestro actual) y `RESETEO` (stock) ya evitan que eso derive en sobre-stockear a alguien que se dio de baja o que no vendió.
+Diagnóstico previo con los archivos de `backup/`: cuando la app usaba `outer`, mantenía 222 agentes presentes en Abril/Mayo pero ausentes en Junio. Eso agregaba 125 filas y 135 unidades respecto del script corregido, aunque las filas compartidas coincidían exacto. El cambio no modifica fórmulas; solo alinea qué agentes entran al cálculo.
 
 ## Verificación fila por fila (`ID P.F` + `SKU`)
 
-Además de comparar totales por SKU, se verificó cantidad por cantidad: se cruzó la salida de la app nueva contra la del script legacy corregido por `(ID P.F, SKU)`, sobre 7.977 combinaciones.
+Además de comparar totales por SKU, se verificó cantidad por cantidad: se cruzó la salida de la app nueva contra la del script legacy corregido por `(ID P.F, SKU)`.
 
 | | Cantidad |
 |---|---|
 | Coinciden exacto (misma cantidad, ambos lados) | 7.852 |
-| Presentes solo en la app nueva (los 222 agentes del punto anterior) | 125 filas, 135 unidades |
+| Presentes solo en la app nueva | 0 |
 | Presentes solo en el script corregido | 0 |
 | Presentes en ambos lados con cantidad **distinta** | 0 |
 
-Cero filas con cantidad distinta entre agentes presentes en ambos cálculos: para cualquier agente que exista en los dos universos, el número da idéntico al dígito. Toda la diferencia que pueda verse entre la app nueva y el script legacy corregido se explica por qué agentes entran al cálculo, nunca por la fórmula en sí.
+Cero filas con cantidad distinta: la app nueva y el script legacy corregido coinciden por agente/SKU y por totales de `DESCRIPCION`/`CANTIDAD`.

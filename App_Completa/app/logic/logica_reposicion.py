@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import os
 import traceback
-from functools import reduce
 from pathlib import Path
 from .cargador import _leer as _leer_archivo
 from .cargador import _num as _numerizar
@@ -134,10 +133,11 @@ def ejecutar_proceso_reposicion(
         df_C2r = df_C2.rename(columns={c: f"{c}_m2" for c in df_C2.columns if c != "ID P.F"})
         df_C3r = df_C3.rename(columns={c: f"{c}_m3" for c in df_C3.columns if c != "ID P.F"})
 
-        df_consumos = reduce(
-            lambda l, r: pd.merge(l, r, on="ID P.F", how="outer"),
-            [df_C1r, df_C2r, df_C3r],
-        )
+        # Replica el universo del proceso legacy corregido: el mes mas reciente
+        # define que agentes entran al calculo. Si un agente no esta en M3, no
+        # se repone aunque tenga historial en M1/M2.
+        df_consumos = pd.merge(df_C2r, df_C3r, on="ID P.F", how="right")
+        df_consumos = pd.merge(df_C1r, df_consumos, on="ID P.F", how="right")
 
         # Columnas del maestro para el merge
         cols_stock = [

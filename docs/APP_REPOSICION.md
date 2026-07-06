@@ -165,9 +165,9 @@ AGENTE_NEGATIVO = (STOCK_ROLLO < 0) OR (STOCK_RESMA < 0)
 ### Preparación
 
 1. Lee los 3 archivos históricos (M-3, M-2, M-1) y les agrega sufijos `_m1`, `_m2`, `_m3`.
-2. Hace outer join de los 3 históricos y luego left join con el maestro actual.
+2. Une los 3 históricos con el mes más reciente (M-1 / `_m3`) como universo de agentes, igual que el script legacy corregido, y luego hace left join con el maestro actual.
 3. Convierte todas las columnas numéricas; rellena NaN con 0.
-4. Si `SUBSEGMENTACION` quedó en 0 (celda vacía), se reemplaza por 1 para no anular la reposición.
+4. Si `SUBSEGMENTACION` quedó en 0 (celda vacía), se mantiene en 0 y anula la reposición de ese agente.
 
 ### Stock ajustado (proyección al momento de entrega)
 
@@ -377,7 +377,7 @@ El resto de los parámetros son editables en la UI (Paso 3, pestaña Parámetros
 
 Toda la investigación, hallazgos y correcciones sobre por qué la app nueva y el script legacy (`backup/repo_con_segmento_para_eliminar_agentes_v9.2.py`) pueden dar resultados distintos se movieron a un documento aparte: **[`COMPARACION_LEGACY.md`](COMPARACION_LEGACY.md)**.
 
-Incluye: el bug de tipo de dato en `ID P.F` que hacía perder el 99.98% del historial en el script legacy, en qué casos puede repetirse, por qué la app nueva es la referencia confiable, la copia corregida del script (`backup/repo_con_segmento_para_eliminar_agentes_v9.2_CORREGIDO.py`), la diferencia de criterio en qué agentes entran al cálculo (join `outer` vs `right`), y la verificación fila por fila `ID P.F` + `SKU`.
+Incluye: el bug de tipo de dato en `ID P.F` que hacía perder el 99.98% del historial en el script legacy, en qué casos puede repetirse, por qué la app nueva es la referencia confiable, la copia corregida del script (`backup/repo_con_segmento_para_eliminar_agentes_v9.2_CORREGIDO.py`), y la verificación fila por fila `ID P.F` + `SKU`.
 
 ---
 
