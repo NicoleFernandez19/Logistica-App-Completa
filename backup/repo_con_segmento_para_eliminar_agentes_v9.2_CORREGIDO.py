@@ -12,6 +12,14 @@ from pandas import ExcelWriter
 # donde esta este script.
 # NOMBRE_*: el nombre de archivo dentro de esa carpeta. Son los unicos valores
 # que suelen cambiar mes a mes.
+#
+# OJO con rutas de Windows (con backslash \): hay que escribirlas con una "r"
+# ANTES de la comilla, sino Python rompe con "SyntaxError: (unicode error)
+# 'unicodeescape' codec can't decode..." apenas la ruta tenga \U, \n, \t, etc.
+#   MAL:   CARPETA_ENTRADA = 'C:\Users\user\Reposicion\2026-07'
+#   BIEN:  CARPETA_ENTRADA = r'C:\Users\user\Reposicion\2026-07'
+#   BIEN tambien (barras normales, Windows las acepta igual):
+#          CARPETA_ENTRADA = 'C:/Users/user/Reposicion/2026-07'
 # ============================================================================
 
 CARPETA_ENTRADA = ''
