@@ -39,6 +39,23 @@ Data_OLD/          ← Archivos procesados (se mueven automáticamente al finali
 
 ---
 
+## Flujo de la app (4 pasos)
+
+1. **Consumo** — cargar los 11 archivos del mes (ver tabla abajo) y calcular el consumo por agente.
+2. **Cálculo de Consumo** — revisar métricas y tablas de resultado; se guarda automáticamente el MaestroStock del mes en `Maestro_Consumo/`.
+3. **Reposición** — cargar el maestro actual + 3 meses históricos y ajustar parámetros/productos si hace falta.
+4. **Pedidos** — calcular la reposición y exportar `REPOSICION_FINAL.xlsx` (pedido) y `REPOSICION_DETALLADO.xlsx` (todas las columnas intermedias del cálculo).
+
+Documentación completa de la lógica de cálculo, reglas de negocio y formatos de archivo: [`docs/APP_REPOSICION.md`](../docs/APP_REPOSICION.md). Casos de prueba funcionales: [`docs/CASOS_DE_PRUEBA.md`](../docs/CASOS_DE_PRUEBA.md).
+
+---
+
+## Carpeta `backup/`
+
+Contiene la versión anterior de la app: un script suelto (`repo_con_segmento_para_eliminar_agentes_v9.2.py`) que hacía manualmente lo que hoy automatizan los Pasos 3 y 4. Se conserva como referencia histórica, no como fuente de verdad — ver ["Comparación con el script legacy"](../docs/APP_REPOSICION.md#comparación-con-el-script-legacy-backuprepo_con_segmento_para_eliminar_agentes_v92py) en la documentación completa para un caso concreto donde ese script dio resultados incorrectos por no normalizar el tipo de dato del ID de agente entre archivos.
+
+---
+
 ## Archivos necesarios para el Paso 1 (Consumo)
 
 Colocar en `Data/` con cualquier nombre que contenga las palabras clave:

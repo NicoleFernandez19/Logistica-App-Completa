@@ -22,7 +22,7 @@ Antes de comenzar, tener disponibles archivos de prueba con las siguientes carac
 | `TRX_SUBE_valido.xlsx` | Columnas: `ID_PF`, `TRX_SUBE`. |
 | `FAJAS_valido.xlsx` | Columnas: `ID_PF`, `Qx FAJAS`. |
 | `Consumo_M1.xlsx`, `Consumo_M2.xlsx`, `Consumo_M3.xlsx` | Archivos MaestroStock de meses anteriores con columna `ID P.F` y columnas `ROLLO`, `ROLLO SUBE`, `ROLLO PRISMA`, `STOCK ROLLO`, etc. |
-| `Agentes_CP.xlsx` | Columnas: `ID P.F`. Lista de agentes Canal Propio. |
+| `Agentes_CP.xlsx` | Columnas: `ID P.F`. Lista de agentes Canal Propio — **no afecta el cálculo** (ver CP-18); el ajuste se decide por `NOMBRE FANTASIA` conteniendo `"C.S."`. Sirve solo para probar que el slot de carga funciona. |
 
 ---
 
@@ -192,9 +192,11 @@ Antes de comenzar, tener disponibles archivos de prueba con las siguientes carac
 
 ### CP-18: Ajuste Canal Propio
 
-**Precondición:** `Agentes_CP.xlsx` contiene al menos 1 agente que tiene reposición de rollos.  
+**Precondición:** Al menos un agente con `NOMBRE FANTASIA` que contenga `"C.S."` (ej: `"C.S. CARREFOUR BERUTI"`) tiene reposición de rollos > 0.  
 **Verificación:** Buscar en el resultado las filas de ese agente para SKU `9001222100` o `9001222101`. La CANTIDAD debe ser `ceil(valor_base * 0.82)`.  
-**Criterio:** El ajuste del 18% aplica solo a agentes Canal Propio y solo a los SKUs configurados.
+**Criterio:** El ajuste del 18% aplica solo a agentes cuyo `NOMBRE FANTASIA` contiene `"C.S."` y solo a los SKUs configurados en `skus_ajuste_canal_propio`.
+
+**Importante:** el archivo cargado en el slot "Agentes Canal Propio" (Paso 3) **no participa en esta decisión** — se lee pero no se usa (ver nota en "Agentes Canal Propio" en `APP_REPOSICION.md`). Cargar `Agentes_CP.xlsx` con o sin el agente de prueba no cambia el resultado; lo único que importa es el texto de `NOMBRE FANTASIA`.
 
 ---
 
@@ -253,8 +255,8 @@ Antes de comenzar, tener disponibles archivos de prueba con las siguientes carac
 ### CP-25: SUBSEGMENTACION vacía en el maestro
 
 **Precondición:** El MaestroStock tiene celdas vacías en la columna `SUBSEGMENTACION`.  
-**Verificación:** Los agentes con `SUBSEGMENTACION` vacía reciben la misma reposición que si tuvieran valor 1 (no se anulan).  
-**Criterio:** La reposición no es 0 para esos agentes.
+**Verificación:** Los agentes con `SUBSEGMENTACION` vacía o en 0 reciben reposición **0 en todos los productos** (el valor se mantiene en 0, no se reemplaza por 1 — es el mismo comportamiento del script legacy).  
+**Criterio:** La reposición es 0 para esos agentes; si se esperaba que recibieran algo, el problema está en el dato de origen (`SUBSEGMENTACION` vacía en el maestro), no en la app.
 
 ---
 

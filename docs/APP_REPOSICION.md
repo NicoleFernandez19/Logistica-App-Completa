@@ -232,7 +232,9 @@ El producto **ROLLO TERMICO** (SKU 9001222100) excluye agentes con `PROV = "MEND
 
 ### SUBSEGMENTACION como multiplicador
 
-`SUBSEGMENTACION` funciona como un multiplicador de la reposición base. Permite ajustar la cantidad a reponer según el volumen relativo del punto de venta dentro del segmento. Si el campo viene vacío o en 0, se trata como 1 (valor neutro) para no anular la reposición del agente.
+`SUBSEGMENTACION` funciona como un multiplicador de la reposición base (`repo = ... × SUBSEGMENTACION × factor`). Permite ajustar la cantidad a reponer según el volumen relativo del punto de venta dentro del segmento.
+
+**Si el campo viene vacío o en 0, se mantiene en 0** — no hay ningún reemplazo por 1. Eso anula la reposición de ese agente en todos los productos (`logica_reposicion.py`, comentario junto a la línea 167: *"si quedó en 0 (celda vacía) se mantiene en 0, anulando la reposición del agente"*). Es intencional: replica el comportamiento del script legacy. Si un agente debería recibir reposición y no la está recibiendo, lo primero a revisar es si `SUBSEGMENTACION` llegó vacía o en 0 desde el maestro.
 
 ### DEP (Agentes Dependientes)
 
@@ -258,14 +260,17 @@ Al guardar el MaestroStock al final del Paso 2, si ya existe un archivo con el m
 
 ## Productos configurados (`config.py`)
 
-| SKU | Descripción | Método | Factor | Redondeo |
-|---|---|---|---|---|
-| 9001222100 | ROLLO TERMICO PF-WU x5 (excluye Mendoza) | regresion | 1.1 | 0.3 |
-| 9001222101 | ROLLO TERMICO MZA PF-WU x5 (solo Mendoza) | regresion | 1.1 | 0.3 |
-| 9001219112 | BOLSA RECOLECCION x1 | promedio | — | — |
-| 9001223489 | ROLLO TERMICO DEBITO PRISMA x5 | regresion | — | 0.2 |
-| 9001214102 | ROLLO TERMICOS SUBE x5 | regresion | — | 0.3 |
-| 9001000000 | RESMA A4 (SKU/descripción placeholder, pendiente de reemplazar por el real) | regresion | — | 0.3 |
+| SKU | Descripción | Método | Factor | Redondeo | Filtro |
+|---|---|---|---|---|---|
+| 9001222100 | ROLLO TERMICO PF-WU x 5 R. PAPER | regresion | `factor_ajuste_rollos` (1.1) | 0.3 | excluye Mendoza |
+| 9001222101 | ROLLO TERMICO MZA PF-WU x 5 R. PAPER | regresion | `factor_ajuste_rollos` (1.1) | 0.3 | solo Mendoza |
+| 9001219112 | BOLSA RECOLECCION x 1 unid | promedio | — (1.0) | — (ceil directo) | — |
+| 9001223489 | ROLLO TERMICO DEBITO PRISMA x 5 unid | regresion | — (1.0) | 0.2 | — |
+| 9001214102 | ROLLO TERMICOS SUBE x 5 unid | regresion | — (1.0) | 0.3 | — |
+| 9001218106 | RESMA DE PAPEL BLANCO TAMAÑO CARTA | regresion | — (1.0) | 0.3 | — |
+| 9001214107 | FAJAS DE BILLETES x 200 unid | promedio_ajustado_dep | `factor_ajuste_fajas` (1.1) | — (ceil directo, 0 si `DEP=1`) | — |
+
+`ROLLO` y `ROLLO MENDOZA` comparten la misma columna de consumo histórico (`ROLLO`) y la misma fórmula; solo cambia el filtro de provincia aplicado al armar el pedido final, para que cada agente reciba el SKU logístico correcto según su ubicación.
 
 ---
 
@@ -426,8 +431,8 @@ Podría pensarse que la solución es re-tipear los Excel de Abril/Mayo como text
 
 **`logica_reposicion.py`**
 - Validación de columna `ID P.F` en cada archivo histórico con mensaje descriptivo.
-- Normalización de IDs del archivo de agentes Canal Propio (strip + eliminación de guiones) para garantizar coincidencia correcta con los IDs del resultado.
-- `SUBSEGMENTACION = 0` se reemplaza por 1 después de la conversión numérica.
+- Normalización de IDs del archivo de agentes Canal Propio (strip + eliminación de guiones) — nota: esta lista terminó sin usarse en el cálculo, ver "Agentes Canal Propio" más arriba.
+- `SUBSEGMENTACION = 0` se mantiene en 0 (sin reemplazo por 1), replicando el comportamiento del script legacy — ver "SUBSEGMENTACION como multiplicador".
 
 **`paso1_carga.py`**
 - Auto-detección reescrita con matching por substring y pool sin reemplazo. `trx_sube` tiene prioridad sobre `sube`. Keywords ordenados de más específico a más genérico.
