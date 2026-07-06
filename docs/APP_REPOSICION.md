@@ -297,7 +297,7 @@ Deben tener el formato del MaestroStock exportado por Paso 2 con columna `ID P.F
 `NOMBRE FANTASIA`, `PROV`, `DEP`, `SEGMENTO`, `SUBSEGMENTACION`, `STOCK ROLLO`, `STOCK SUBE`, `STOCK PRISMA`, `STOCK RESMA`, `TIPO`, `ROLLO`, `BOLSA RECOLECCION`, `ROLLO SUBE`, `ROLLO PRISMA`, `RESMA`, `FAJAS`.
 
 ### Agentes Canal Propio
-Columna requerida: `ID P.F` (o `ID_PF`). Solo se usa para identificar qué agentes reciben el ajuste del 18%.
+Columna requerida: `ID P.F` (o `ID_PF`). **Este archivo actualmente no afecta el cálculo.** `ejecutar_proceso_reposicion` lo lee y arma una lista de IDs (`lista_agentes_ajuste`) que nunca se vuelve a usar — es código muerto. El ajuste Canal Propio del 18% se decide, igual que en el script legacy, buscando `"C.S."` dentro de `NOMBRE FANTASIA` (ver `logica_reposicion.py`, filtro `filtro_cp`). Cargar o no este archivo en el Paso 3 no cambia ninguna cantidad del resultado.
 
 ---
 
@@ -365,6 +365,46 @@ Verificadas al inicio por `pre_app_check.py`. Si falta alguna, muestra instrucci
 | `ajuste_canal_propio` | 0.82 | Factor de reducción para agentes Canal Propio |
 
 El resto de los parámetros son editables en la UI (Paso 3, pestaña Parámetros) sin necesidad de modificar el código.
+
+---
+
+## Comparación con el script legacy (`backup/repo_con_segmento_para_eliminar_agentes_v9.2.py`)
+
+### Por qué los totales pueden dar muy distintos aunque "sean los mismos archivos"
+
+Investigación (2026-07-06): se comparó `REPOSICION_FINAL_App_Actual.xlsx` (app nueva) contra `REPOSICION_FINAL_App_vieja.xlsx` (corrida manual del script legacy), ambos supuestamente generados con los mismos 4 archivos de `backup/` (`CONSUMO_ABRIL_2026.xlsx`, `CONSUMO_MAYO_2026.xlsx`, `CONSUMO_MENSUAL_202607.xlsx` como Junio, `MAESTRO_CONSUMO_ENVIO_SEPTIEMBRE_2026.xlsx`). Los totales por SKU diferían entre 30% y 80%. Se ejecutó el script legacy sin modificar (vía subprocess) con esos mismos archivos y su salida coincidió exactamente con `REPOSICION_FINAL_App_vieja.xlsx` — así que la diferencia no era un archivo mal comparado, era un problema real de cálculo del script legacy.
+
+**Causa encontrada:** la columna `ID P.F` viene guardada con **tipo de celda distinto según el archivo**:
+
+| Archivo | Tipo de celda `ID P.F` |
+|---|---|
+| `CONSUMO_ABRIL_2026.xlsx` | numérico (Excel "Número") |
+| `CONSUMO_MAYO_2026.xlsx` | numérico (Excel "Número") |
+| `CONSUMO_MENSUAL_202607.xlsx` (Junio) | texto (Excel "Texto") |
+| `MAESTRO_CONSUMO_ENVIO_SEPTIEMBRE_2026.xlsx` | texto (Excel "Texto") |
+
+El script legacy hace `pd.merge(..., on="ID P.F")` sin convertir nada a texto primero. Pandas lee cada columna con el tipo que trae la celda de Excel, así que compara `90001288` (int) contra `'90001288'` (str) — no matchean nunca. El resultado: en la corrida real, **4.941 de 4.942 agentes (99.98%) perdieron el consumo de Abril y Mayo**, quedando en 0 por el `fillna(0)` del script, y la "regresión de 3 meses" terminó calculando en la práctica con `(0, 0, junio)` en vez de los tres meses reales. Esto explica el patrón completo:
+- Productos con método **regresión** (ROLLO, ROLLO PRISMA, ROLLO SUBE, RESMA) salían más altos en el legacy: extrapolar una "tendencia" desde `0 → 0 → junio` sobreestima el mes siguiente.
+- **BOLSA RECOLECCION** (método promedio simple) salía más bajo: promediar un solo mes real entre tres lo diluye a un tercio.
+
+La app nueva no sufre esto porque normaliza `ID P.F` a texto (`strip()` + eliminación de guiones) **antes** de cualquier merge, en los históricos, el maestro y el archivo de agentes (ver "Normalización de IDs" más arriba).
+
+### En qué casos puede volver a pasar
+
+- Cualquier archivo de consumo/maestro donde `ID P.F` se haya tipeado o pegado como número en Excel (en vez de como texto) mientras otro archivo del mismo cálculo lo tiene como texto. Es común que esto pase solo, por ejemplo al pegar valores con "Pegado especial → Valores" desde otro reporte, o al generar el Excel con una herramienta distinta (Power BI, un export de SQL) que tipa la columna distinto que el resto.
+- Cuantos más agentes tengan el ID en un tipo de celda distinto al de los demás archivos del mismo cálculo, mayor la porción del historial que se pierde en silencio — y el error no lanza ninguna advertencia ni excepción, simplemente rellena con 0.
+- Esto **solo afecta al script legacy** (o a cualquier código nuevo que vuelva a hacer merges sobre `ID P.F` sin normalizar el tipo primero). No es un riesgo para la app actual mientras la normalización de IDs en `logica_reposicion.py` / `cargador.py` siga aplicándose a todos los archivos de entrada.
+
+### Por qué la app nueva es la referencia válida, y no conviene "bajar" al formato viejo
+
+Podría pensarse que la solución es re-tipear los Excel de Abril/Mayo como texto para que calcen con el formato que el script legacy sí procesa bien. **No es la dirección correcta:**
+
+1. El script legacy solo "funciona" con esos archivos por casualidad de que Abril y Mayo comparten el mismo tipo de celda entre sí — no porque valide o normalice nada. Cualquier archivo futuro con el tipo de celda "equivocado" (numérico en vez de texto, o viceversa) rompe el cálculo otra vez, en silencio, sin aviso.
+2. La app nueva no depende de que los archivos de entrada vengan con un tipo de celda particular: normaliza el ID sin importar si Excel lo guardó como número o como texto. Es la versión robusta ante inconsistencias de formato entre archivos generados en momentos o herramientas distintas — que es exactamente lo que pasó acá.
+3. Adaptar los archivos de entrada al formato que el script viejo tolera es resolver el síntoma para una corrida puntual, no la causa: el próximo mes, con un archivo nuevo, puede volver a romperse de la misma manera si nadie se acuerda de revisar el tipo de celda a mano.
+4. La app nueva ya fue verificada: corriendo su propia lógica (`ejecutar_proceso_reposicion`) sobre los mismos 4 archivos, sus resultados coinciden con los valores reales de consumo de los archivos fuente (verificado fila por fila para agentes puntuales) — el script legacy, en cambio, coincide con datos que en un 99.98% de los casos son 0 donde no deberían serlo.
+
+**Conclusión:** ante una discrepancia entre la app nueva y el script legacy, la app nueva es la fuente confiable por diseño (normaliza IDs), y el script legacy debe tratarse como referencia poco confiable salvo que se verifique explícitamente que todos sus archivos de entrada comparten el mismo tipo de celda en `ID P.F`.
 
 ---
 
