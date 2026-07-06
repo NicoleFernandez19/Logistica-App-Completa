@@ -1,13 +1,48 @@
+import os
 import numpy as np
 import pandas as pd
 from pandas import ExcelWriter
 
-#Los meses se deben ordenar de esa manera, el 3 es el mas reciente el 2 es el mes pasado y el 1 el mas viejo
-df_CONSUMO1=pd.read_excel('CONSUMO_ABRIL_2026.xlsx')
-df_CONSUMO2=pd.read_excel('CONSUMO_MAYO_2026.xlsx')
-df_CONSUMO3=pd.read_excel('CONSUMO_JUNIO_2026.xlsx')
+# ============================================================================
+# CONFIGURACION -- unico lugar que hay que tocar para correr un mes nuevo.
+# No hace falta modificar nada mas abajo de esta seccion.
+#
+# CARPETA_ENTRADA / CARPETA_SALIDA: la ruta (local o de red) donde estan los
+# archivos y donde se guardan los resultados. Dejar '' para usar la carpeta
+# donde esta este script.
+# NOMBRE_*: el nombre de archivo dentro de esa carpeta. Son los unicos valores
+# que suelen cambiar mes a mes.
+# ============================================================================
 
-df_STOCK=pd.read_excel('MAESTRO_CONSUMO_ENVIO_AGOSTO_2026.xlsx')
+CARPETA_ENTRADA = ''
+CARPETA_SALIDA = ''
+
+NOMBRE_CONSUMO_MES_1 = 'CONSUMO_ABRIL_2026.xlsx'   # mes mas viejo
+NOMBRE_CONSUMO_MES_2 = 'CONSUMO_MAYO_2026.xlsx'    # mes intermedio
+NOMBRE_CONSUMO_MES_3 = 'CONSUMO_JUNIO_2026.xlsx'   # mes mas reciente
+NOMBRE_MAESTRO_STOCK = 'MAESTRO_CONSUMO_ENVIO_AGOSTO_2026.xlsx'
+
+NOMBRE_SALIDA_DETALLADO = 'REPOSICION_DETALLADO_CORREGIDO.xlsx'
+NOMBRE_SALIDA_FINAL     = 'REPOSICION_CRUDO_FINAL_CORREGIDO.xlsx'
+
+# ============================================================================
+# A partir de aca no hace falta tocar nada.
+# ============================================================================
+
+RUTA_CONSUMO_MES_1 = os.path.join(CARPETA_ENTRADA, NOMBRE_CONSUMO_MES_1)
+RUTA_CONSUMO_MES_2 = os.path.join(CARPETA_ENTRADA, NOMBRE_CONSUMO_MES_2)
+RUTA_CONSUMO_MES_3 = os.path.join(CARPETA_ENTRADA, NOMBRE_CONSUMO_MES_3)
+RUTA_MAESTRO_STOCK  = os.path.join(CARPETA_ENTRADA, NOMBRE_MAESTRO_STOCK)
+
+RUTA_SALIDA_DETALLADO = os.path.join(CARPETA_SALIDA, NOMBRE_SALIDA_DETALLADO)
+RUTA_SALIDA_FINAL     = os.path.join(CARPETA_SALIDA, NOMBRE_SALIDA_FINAL)
+
+#Los meses se deben ordenar de esa manera, el 3 es el mas reciente el 2 es el mes pasado y el 1 el mas viejo
+df_CONSUMO1=pd.read_excel(RUTA_CONSUMO_MES_1)
+df_CONSUMO2=pd.read_excel(RUTA_CONSUMO_MES_2)
+df_CONSUMO3=pd.read_excel(RUTA_CONSUMO_MES_3)
+
+df_STOCK=pd.read_excel(RUTA_MAESTRO_STOCK)
 
 # --- FIX (2026-07-06): normalizar ID P.F a texto ANTES de cualquier merge -----
 # Bug original: algunos archivos guardan "ID P.F" como numero de Excel (int) y
@@ -175,7 +210,7 @@ df_union4["PARAMETRO4"]=df_union4["ROLLOS SUBE"]-df_union4["ROLLOS SUBE"].apply(
 df_union4.loc[df_union4["PARAMETRO4"]<=0.3 ,"ROLLOS SUBE"]= df_union4["ROLLOS SUBE"].apply(np.floor)
 df_union4.loc[df_union4["PARAMETRO4"]>0.3,"ROLLOS SUBE"]= df_union4["ROLLOS SUBE"].apply(np.ceil)
 
-df_union4.to_excel('REPOSICION_DETALLADO_CORREGIDO.xlsx', sheet_name='DETALLE')
+df_union4.to_excel(RUTA_SALIDA_DETALLADO, sheet_name='DETALLE')
 
 #Buscamos los siguientes tipos de agentes y le asignamos un 0 (cero) al valor de resma
 
@@ -333,4 +368,4 @@ REPOSICION.loc[filtro_cs, 'CANTIDAD'] = REPOSICION.loc[filtro_cs, 'CANTIDAD'].ap
 # FASE 2: RED MINORISTA 1.VIP
 
 #ultimo paso genera el archivo reposición en la carpeta.
-REPOSICION.to_excel('REPOSICION_CRUDO_FINAL_CORREGIDO.xlsx', sheet_name='DETALLE')
+REPOSICION.to_excel(RUTA_SALIDA_FINAL, sheet_name='DETALLE')
