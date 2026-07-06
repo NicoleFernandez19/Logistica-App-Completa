@@ -11,6 +11,14 @@ env/
 # Datos operativos (se regeneran en cada ejecución, no van al repo)
 App_Completa/Data/
 App_Completa/Data_OLD/
+App_Completa/Maestro_Consumo/
+
+# Cualquier archivo Excel/CSV que pueda pasar por la app (insumos, exports,
+# maestros). Excepcion: backup/, donde SI se suben (version anterior de la app).
+*.xlsx
+*.xls
+*.csv
+!backup/**
 
 # Archivos internos de Claude Code
 .claude/
