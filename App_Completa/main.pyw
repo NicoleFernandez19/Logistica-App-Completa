@@ -7,7 +7,7 @@ if _BASE not in sys.path:
     sys.path.insert(0, _BASE)
 
 # Auto-instalar dependencias si faltan
-_DEPS = ["customtkinter", "pandas", "openpyxl", "numpy", "xlrd"]
+_DEPS = ["customtkinter", "pandas", "openpyxl", "numpy", "xlrd", "tkinterdnd2"]
 _missing = []
 for dep in _DEPS:
     try:

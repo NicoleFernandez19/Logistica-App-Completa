@@ -15,6 +15,7 @@ REQUIRED_MODULES = {
     "numpy": "numpy",
     "openpyxl": "openpyxl",
     "xlrd": "xlrd",
+    "tkinterdnd2": "tkinterdnd2",
 }
 
 

@@ -8,7 +8,7 @@ import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
                       GRIS_TEXTO, GRIS_BORDE, VERDE, INFO_BG,
                       APPLE_FILL, APPLE_HOVER, APPLE_SELECTED)
-from .componentes import esta_en_carpeta
+from .componentes import esta_en_carpeta, registrar_drop
 from ..config import MESES_A_NUMERO as _MESES_P1
 
 _ARCHIVOS = [
@@ -153,9 +153,11 @@ class Paso1Carga(ctk.CTkFrame):
         sel.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
         self._lbl_libro_archivo = ctk.CTkLabel(
-            sel, text="Sin archivo seleccionado",
+            sel, text="Sin archivo seleccionado  (o arrastralo acá)",
             font=("Segoe UI", 11), text_color=GRIS_TEXTO, anchor="w")
         self._lbl_libro_archivo.pack(side="left", fill="x", expand=True, padx=10, pady=6)
+        registrar_drop(sel, self._libro_drop)
+        registrar_drop(self._lbl_libro_archivo, self._libro_drop)
 
         ctk.CTkButton(sel, text="...", width=34, height=30,
                       fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
@@ -187,7 +189,6 @@ class Paso1Carga(ctk.CTkFrame):
         self._lbl_libro_hint.grid(row=0, column=0, columnspan=3, padx=12, pady=12)
 
     def _libro_seleccionar(self):
-        import pandas as pd
         base = Path(sys.argv[0]).resolve().parent
         data_dir = base / "Data"
         data_dir.mkdir(exist_ok=True)
@@ -198,6 +199,20 @@ class Paso1Carga(ctk.CTkFrame):
         )
         if not path:
             return
+        self._libro_procesar(path)
+
+    def _libro_drop(self, rutas):
+        """Callback de arrastrar-y-soltar para la pestaña 'Carga desde libro'."""
+        path = next((r for r in rutas if Path(r).suffix.lower() in {".xlsx", ".xls"}), None)
+        if not path:
+            messagebox.showerror("Archivo no válido", "Soltá un archivo .xlsx o .xls.")
+            return
+        self._libro_procesar(path)
+
+    def _libro_procesar(self, path):
+        """Lee las hojas del libro y arma el mapeo de slots. Usado tanto por
+        el diálogo de selección como por arrastrar-y-soltar."""
+        import pandas as pd
         try:
             xl = pd.ExcelFile(path, engine="openpyxl")
             hojas = xl.sheet_names
@@ -335,6 +350,7 @@ class Paso1Carga(ctk.CTkFrame):
                                anchor="w", height=30)
             lbl.grid(row=i, column=2, sticky="nsew", padx=(0, 4), pady=1)
             self._mult_lbls[key] = lbl
+            registrar_drop(lbl, lambda rutas, k=key: self._mult_drop(k, rutas))
 
             ctk.CTkButton(scroll, text="...", width=36, height=28,
                           fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
@@ -342,6 +358,10 @@ class Paso1Carga(ctk.CTkFrame):
                           corner_radius=6,
                           command=lambda k=key: self._mult_examinar(k)).grid(
                 row=i, column=3, pady=1, padx=(0, 4))
+
+        # Soltar varios archivos a la vez sobre el área general: se asignan
+        # por coincidencia de nombre, igual que la autodetección.
+        registrar_drop(scroll, self._mult_drop_multiple)
 
     def _mult_examinar(self, key):
         base = Path(sys.argv[0]).resolve().parent
@@ -354,13 +374,58 @@ class Paso1Carga(ctk.CTkFrame):
         )
         if not path:
             return
-        p = Path(path)
-        # Validación visual directamente en la fila del tab
+        self._mult_asignar(key, path)
+
+    def _mult_asignar(self, key, path_str):
+        """Asigna un archivo a un casillero puntual. Usado tanto por
+        'Examinar' como por arrastrar-y-soltar sobre esa fila."""
+        p = Path(path_str)
+        if p.suffix.lower() not in _EXTS:
+            messagebox.showerror("Archivo no válido",
+                                  f"'{p.name}' no es un CSV/Excel soportado.")
+            return
         self._mult_iconos[key].configure(text="✓", text_color=VERDE)
         self._mult_vars[key].set(f"  {p.name}")
         self._mult_lbls[key].configure(text_color=VERDE)
         self._set_path(key, str(p), p.name, auto=False)
         self._actualizar_counter()
+
+    def _mult_drop(self, key, rutas):
+        """Callback de arrastrar-y-soltar sobre la fila de un casillero puntual."""
+        path = next((r for r in rutas if Path(r).suffix.lower() in _EXTS), None)
+        if not path:
+            messagebox.showerror("Archivo no válido",
+                                  "Soltá un archivo CSV, XLSX o XLS.")
+            return
+        self._mult_asignar(key, path)
+
+    def _mult_drop_multiple(self, rutas):
+        """Callback de arrastrar-y-soltar de varios archivos sobre el área
+        general del tab: los asigna por coincidencia de nombre (misma lógica
+        que la autodetección)."""
+        pool = {Path(r).stem.lower(): r for r in rutas
+                if Path(r).suffix.lower() in _EXTS and not Path(r).name.startswith("~$")}
+        if not pool:
+            messagebox.showerror("Archivo no válido",
+                                  "Ninguno de los archivos soltados es un CSV/Excel soportado.")
+            return
+        asignados = []
+        for key, nombres in _AUTO_NOMBRES.items():
+            match_stem = None
+            for nombre in nombres:
+                match_stem = next((s for s in pool if nombre in s), None)
+                if match_stem:
+                    break
+            if match_stem:
+                self._mult_asignar(key, pool[match_stem])
+                del pool[match_stem]
+                asignados.append(key)
+        if not asignados:
+            messagebox.showerror(
+                "Sin coincidencias",
+                "No se pudo identificar a qué casillero corresponde ninguno "
+                "de los archivos soltados. Arrastralos uno por uno sobre su fila.",
+            )
 
 
     # ── Auto-detección ────────────────────────────────────────────────────────
@@ -388,7 +453,8 @@ class Paso1Carga(ctk.CTkFrame):
             return None
         candidatos = [
             p for p in carpeta_mc.iterdir()
-            if p.is_file() and p.suffix.lower() in _EXTS and "maestro" in p.stem.lower()
+            if p.is_file() and not p.name.startswith("~$")
+            and p.suffix.lower() in _EXTS and "maestro" in p.stem.lower()
         ]
         if not candidatos:
             return None
@@ -416,7 +482,8 @@ class Paso1Carga(ctk.CTkFrame):
         if not self._libro_ya_autodetectado:
             try:
                 for p in data_dir.iterdir():
-                    if p.is_file() and p.suffix.lower() in {".xlsx", ".xls"} \
+                    if p.is_file() and not p.name.startswith("~$") \
+                            and p.suffix.lower() in {".xlsx", ".xls"} \
                             and _LIBRO_STEM in p.stem.lower():
                         self._libro_autodetectar(p)
                         break
@@ -429,7 +496,7 @@ class Paso1Carga(ctk.CTkFrame):
         for carpeta in carpetas:
             try:
                 for p in carpeta.iterdir():
-                    if p.is_file() and p.suffix.lower() in _EXTS:
+                    if p.is_file() and not p.name.startswith("~$") and p.suffix.lower() in _EXTS:
                         stem = p.stem.lower()
                         if stem not in disponibles:
                             disponibles[stem] = p

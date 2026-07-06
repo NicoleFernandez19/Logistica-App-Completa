@@ -7,7 +7,7 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from .componentes import TablaWidget, mostrar_dialogo, confirmar
+from .componentes import TablaWidget, mostrar_dialogo, confirmar, registrar_drop
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
                       GRIS_TEXTO, GRIS_BORDE, VERDE, INFO_BG, INFO_BORDE,
                       APPLE_FILL, APPLE_HOVER, APPLE_SELECTED)
@@ -250,6 +250,7 @@ class Paso3Reposicion(ctk.CTkFrame):
                             anchor="w", height=38)
         lbl.pack(side="left", fill="x", expand=True)
         self._lbls[key] = lbl
+        registrar_drop(lbl, lambda rutas, k=key: self._drop_individual(k, rutas))
 
         btn = ctk.CTkButton(inp, text="...", width=36, height=38,
                             fg_color=APPLE_FILL, hover_color=APPLE_HOVER,
@@ -408,7 +409,7 @@ class Paso3Reposicion(ctk.CTkFrame):
         por_fecha = {}          # {(año, mes): Path}
         if carpeta_mc.exists():
             for p in carpeta_mc.iterdir():
-                if p.is_file() and p.suffix.lower() in _EXTS:
+                if p.is_file() and not p.name.startswith("~$") and p.suffix.lower() in _EXTS:
                     fecha = self._fecha_archivo(p)
                     if fecha[0] > 0 and fecha[1] > 0:
                         por_fecha[fecha] = p
@@ -459,7 +460,7 @@ class Paso3Reposicion(ctk.CTkFrame):
             try:
                 for p in carpeta.iterdir():
                     stem = p.stem.lower()
-                    if not p.is_file() or p.suffix.lower() not in _EXTS:
+                    if not p.is_file() or p.name.startswith("~$") or p.suffix.lower() not in _EXTS:
                         continue
                     if "consumo" in stem and "maestro" not in stem:
                         consumos.append(p)
@@ -547,6 +548,15 @@ class Paso3Reposicion(ctk.CTkFrame):
             initialdir=str(idir),
         )
         if not path:
+            return
+        self._set_path(key, path, auto=False)
+
+    def _drop_individual(self, key, rutas):
+        """Callback de arrastrar-y-soltar sobre la fila de un casillero."""
+        path = next((r for r in rutas if Path(r).suffix.lower() in _EXTS), None)
+        if not path:
+            mostrar_dialogo(self, "error", "Archivo no válido",
+                            "Soltá un archivo CSV, XLSX o XLS.")
             return
         self._set_path(key, path, auto=False)
 

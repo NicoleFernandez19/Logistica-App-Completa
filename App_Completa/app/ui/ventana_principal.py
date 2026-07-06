@@ -1,4 +1,10 @@
 import customtkinter as ctk
+try:
+    from tkinterdnd2 import TkinterDnD
+    _DND_DISPONIBLE = True
+except ImportError:
+    TkinterDnD = None
+    _DND_DISPONIBLE = False
 from .estilos import (configurar_tema, set_modo_apariencia,
                       NEGRO, AMARILLO, AMARILLO_DARK,
                       BLANCO, GRIS_BG, GRIS_BORDE, GRIS_TEXTO,
@@ -10,17 +16,28 @@ _PASOS = ["Archivos", "Consumo", "Reposicion", "Pedidos"]
 _N_CONSUMO     = 11  # archivos requeridos en paso 1
 _N_REPOSICION  = 4   # maestro actual + 3 historicos (agentes es opcional)
 
+_Base = (TkinterDnD.DnDWrapper, ctk.CTk) if _DND_DISPONIBLE else (ctk.CTk,)
 
-class VentanaPrincipal(ctk.CTk):
+
+class VentanaPrincipal(*_Base):
+    """Ventana raiz. Si tkinterdnd2 esta disponible, habilita arrastrar y
+    soltar archivos desde el explorador (ver componentes.registrar_drop)."""
+
     def __init__(self):
         configurar_tema()
         super().__init__()
+        if _DND_DISPONIBLE:
+            self.TkdndVersion = TkinterDnD._require(self)
 
         self.title("Western Union - Reposicion de Insumos")
         self.geometry("1420x880")
         self.minsize(1180, 760)
         self.configure(fg_color=GRIS_BG)
-        self.state("zoomed")
+        # Maximizar recien despues de que la ventana termine de dibujarse:
+        # si se hace en el mismo __init__, el recalculo de escala por DPI
+        # que hace CustomTkinter poco despues del arranque puede "deshacer"
+        # el estado zoomed, y se ve la ventana agrandarse y luego achicarse.
+        self.after(10, lambda: self.state("zoomed"))
 
         # ── Estado compartido entre pasos ────────────────────────────────────
         self._df_tiv      = None   # resultado de calcular()

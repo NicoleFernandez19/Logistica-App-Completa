@@ -1,3 +1,4 @@
+import re
 import shutil
 import threading
 import queue as q_module
@@ -8,10 +9,20 @@ from tkinter import filedialog
 import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
                       GRIS_TEXTO, GRIS_BORDE, ROJO, APPLE_FILL, APPLE_HOVER)
-from .componentes import TablaWidget, PanelMetrica, mostrar_dialogo, esta_en_carpeta
+from .componentes import (TablaWidget, PanelMetrica, mostrar_dialogo,
+                          esta_en_carpeta, mensaje_error_guardado)
 from ..config import REGLAS, AGENTES_A_EXCLUIR
 
 _COLS_FINAL = ["ID P.F", "NOMBRE FANTASIA", "SKU", "DESCRIPCION", "CANTIDAD", "SEGMENTO"]
+
+# Sufijo de archivado ya aplicado por una corrida anterior, ej. "_20260527" o
+# "_20260527_2". Se recorta antes de archivar de nuevo para no encadenar
+# fechas si un archivo ya archivado vuelve a pasar por Data/.
+_SUFIJO_ARCHIVADO = re.compile(r"(_\d{8}(_\d+)?)+$")
+
+
+def _nombre_base_archivado(stem):
+    return _SUFIJO_ARCHIVADO.sub("", stem) or stem
 
 
 class Paso4Resultados(ctk.CTkFrame):
@@ -518,10 +529,11 @@ class Paso4Resultados(ctk.CTkFrame):
                 continue
 
             data_old_dir.mkdir(exist_ok=True)
-            destino = data_old_dir / f"{p.stem}_{fecha}{p.suffix}"
+            nombre_base = _nombre_base_archivado(p.stem)
+            destino = data_old_dir / f"{nombre_base}_{fecha}{p.suffix}"
             contador = 1
             while destino.exists():
-                destino = data_old_dir / f"{p.stem}_{fecha}_{contador}{p.suffix}"
+                destino = data_old_dir / f"{nombre_base}_{fecha}_{contador}{p.suffix}"
                 contador += 1
             try:
                 shutil.move(str(p), str(destino))
@@ -594,7 +606,8 @@ class Paso4Resultados(ctk.CTkFrame):
             mostrar_dialogo(self, "info", "Archivo exportado",
                             f"Pedidos guardados en:\n{path}")
         except Exception as exc:
-            mostrar_dialogo(self, "error", "Error al exportar", str(exc))
+            mostrar_dialogo(self, "error", "Error al exportar",
+                            mensaje_error_guardado(exc, path))
 
     def _exportar_detallado(self):
         if self._df_detallado is None:
@@ -612,4 +625,5 @@ class Paso4Resultados(ctk.CTkFrame):
             mostrar_dialogo(self, "info", "Archivo exportado",
                             f"Detallado guardado en:\n{path}")
         except Exception as exc:
-            mostrar_dialogo(self, "error", "Error al exportar", str(exc))
+            mostrar_dialogo(self, "error", "Error al exportar",
+                            mensaje_error_guardado(exc, path))

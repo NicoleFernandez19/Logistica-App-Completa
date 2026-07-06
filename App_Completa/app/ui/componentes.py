@@ -358,3 +358,46 @@ def esta_en_carpeta(path, carpeta):
         return True
     except ValueError:
         return False
+
+
+def mensaje_error_guardado(exc, path):
+    """Traduce errores comunes al guardar/sobreescribir un Excel a un mensaje
+    accionable. PermissionError es casi siempre el archivo abierto en Excel
+    (u otro programa) bloqueando la escritura."""
+    nombre = Path(path).name
+    if isinstance(exc, PermissionError):
+        return (
+            f"No se pudo guardar '{nombre}'.\n\n"
+            "El archivo parece estar abierto en Excel (u otro programa) y no "
+            "se puede sobreescribir mientras esté abierto.\n\n"
+            "Cerralo y volvé a intentar."
+        )
+    return f"No se pudo guardar '{nombre}'.\n\nDetalle: {exc}"
+
+
+try:
+    from tkinterdnd2 import DND_FILES
+    _DND_DISPONIBLE = True
+except ImportError:
+    DND_FILES = None
+    _DND_DISPONIBLE = False
+
+
+def registrar_drop(widget, callback):
+    """Habilita arrastrar-y-soltar archivos del explorador sobre `widget`.
+    `callback` recibe la lista de rutas (str) soltadas. No hace nada si
+    tkinterdnd2 no esta instalado (degradacion graceful: sigue funcionando
+    todo lo demas, solo no hay drag-and-drop)."""
+    if not _DND_DISPONIBLE:
+        return
+    try:
+        widget.drop_target_register(DND_FILES)
+    except Exception:
+        return
+
+    def _on_drop(event):
+        rutas = widget.tk.splitlist(event.data)
+        if rutas:
+            callback(list(rutas))
+
+    widget.dnd_bind("<<Drop>>", _on_drop)

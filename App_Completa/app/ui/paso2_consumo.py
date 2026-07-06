@@ -10,7 +10,7 @@ import customtkinter as ctk
 from .estilos import (AMARILLO, AMARILLO_DARK, NEGRO, BLANCO, GRIS_BG,
                       GRIS_TEXTO, VERDE, VERDE_BG, ROJO, INFO_BG, GRIS_BORDE,
                       APPLE_FILL, APPLE_HOVER, APPLE_SELECTED)
-from .componentes import TablaWidget, PanelMetrica, mostrar_dialogo
+from .componentes import TablaWidget, PanelMetrica, mostrar_dialogo, mensaje_error_guardado
 from ..config import MESES_NOMBRE as _MESES_NOMBRE
 
 _MESES_NUMERO = {v: k for k, v in _MESES_NOMBRE.items()}
@@ -709,18 +709,17 @@ class Paso2Consumo(ctk.CTkFrame):
                 text_color=VERDE,
             )
         except Exception as exc:
-            self._lbl_status.configure(
-                text=f"Error al guardar: {exc}",
-                text_color=ROJO,
-            )
+            texto = mensaje_error_guardado(exc, destino).replace("\n\n", " ")
+            self._lbl_status.configure(text=texto, text_color=ROJO)
 
-    def _ejecutar_exportacion(self, accion, mensaje_ok):
+    def _ejecutar_exportacion(self, accion, mensaje_ok, path):
         """Corre `accion` (que escribe el archivo) y muestra el resultado en un dialogo."""
         try:
             accion()
             mostrar_dialogo(self, "info", "Archivo exportado", mensaje_ok)
         except Exception as exc:
-            mostrar_dialogo(self, "error", "Error al exportar", str(exc))
+            mostrar_dialogo(self, "error", "Error al exportar",
+                            mensaje_error_guardado(exc, path))
 
     def _exportar(self):
         """Botón manual: deja elegir carpeta y nombre de guardado."""
@@ -739,6 +738,7 @@ class Paso2Consumo(ctk.CTkFrame):
         self._ejecutar_exportacion(
             lambda: self._write_export_workbook(path),
             f"MaestroStock guardado en:\n{path}",
+            path,
         )
 
     def _exportar_consumo(self):
@@ -757,5 +757,6 @@ class Paso2Consumo(ctk.CTkFrame):
         self._ejecutar_exportacion(
             lambda: self._construir_consumo_df().to_excel(path, sheet_name="Consumo Mensual", index=False),
             f"Consumo mensual guardado en:\n{path}",
+            path,
         )
 
